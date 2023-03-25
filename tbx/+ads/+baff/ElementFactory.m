@@ -12,7 +12,7 @@ switch class(obj)
         [fe,AnchorPoints] = hinge2fe(obj);
     case 'baff.Mass'
         [fe,AnchorPoints] = mass2fe(obj);
-    case 'Point'
+    case 'baff.Point'
         [fe,AnchorPoints] = point2fe(obj);
     case 'baff.Wing'
         [fe,AnchorPoints] = wing2fe(obj);

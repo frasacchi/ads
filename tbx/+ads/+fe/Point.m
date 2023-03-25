@@ -1,7 +1,7 @@
 classdef Point   < matlab.mixin.SetGet & ads.fe.Element
     properties
-        InputCoordSys = ads.fe.CoordSys.Base;
-        OutputCoordSys = ads.fe.CoordSys.Base;
+        InputCoordSys = ads.fe.BaseCoordSys.get;
+        OutputCoordSys = ads.fe.BaseCoordSys.get;
         X (3,1) double
         DoFs = 123456;
         JointType = ads.fe.JointType.None;
@@ -19,8 +19,8 @@ classdef Point   < matlab.mixin.SetGet & ads.fe.Element
         function obj = Point(X,opts)
             arguments
                 X (3,1) double
-                opts.InputCoordSys ads.fe.CoordSys = ads.fe.CoordSys.Base;
-                opts.OutputCoordSys ads.fe.CoordSys = ads.fe.CoordSys.Base;
+                opts.InputCoordSys ads.fe.AbsCoordSys = ads.fe.BaseCoordSys.get;
+                opts.OutputCoordSys ads.fe.AbsCoordSys = ads.fe.BaseCoordSys.get;
                 opts.DoFs = 123456
                 opts.JointType = ads.fe.JointType.None;
             end

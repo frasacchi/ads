@@ -17,6 +17,7 @@ classdef AeroSurface < ads.fe.Element
         PID (1,1) double = nan;
         SID (3,1) double = [nan,nan,nan];
         SplineType = 4;
+        SplineMeth = 'IPS';
     end
     
     methods
@@ -210,7 +211,7 @@ classdef AeroSurface < ads.fe.Element
                                 mni.printing.cards.AELIST(obj(i).SID(1),obj(i).ID:(id-1)).writeToFile(fid);
                                 mni.printing.cards.SET1(obj(i).SID(2),[obj(i).StructuralPoints.ID]).writeToFile(fid);
                                 if splitMesh
-                                    mni.printing.cards.SPLINE4(id+1,obj(i).ID,obj(i).SID(1),obj(i).SID(3),USAGE='DISP',METH='TPS',FTYPE='WF2',RCORE=0.5).writeToFile(fid);
+                                    mni.printing.cards.SPLINE4(id+1,obj(i).ID,obj(i).SID(1),obj(i).SID(3),USAGE='DISP',METH=obj(i).SplineMeth,FTYPE='WF2',RCORE=0.5).writeToFile(fid);
                                     mni.printing.cards.SET1(obj(i).SID(3),[obj(i).DisplacementPoints.ID]).writeToFile(fid);
                                 end
                             case 6

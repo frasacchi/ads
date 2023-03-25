@@ -14,8 +14,12 @@ fe.CoordSys(1) = ads.fe.CoordSys("Origin",obj.Offset,"A",obj.A*A);
 %Hinge Coordinate system
 x_dir = [1;0;0];
 hinge_k = cross(x_dir,hv);
-hinge_angle = atan2d(1,x_dir'*hv);
-A = ads.util.Rodrigues(hinge_k,hinge_angle);
+if norm(hinge_k) == 0
+    A = eye(3);
+else
+    hinge_angle = atan2d(norm(hinge_k),x_dir'*hv);
+    A = ads.util.Rodrigues(hinge_k,hinge_angle);
+end
 fe.CoordSys(2) = ads.fe.CoordSys("Origin",obj.Offset,"A",obj.A*A);
 
 % generate two coincedent nodes
