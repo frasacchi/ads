@@ -1,9 +1,4 @@
-% model = baff.Model;
-% model.Name = 'DemoWing';
-clear all
-
-FoldAngle = 45; % wingtip fold angle in degrees
-FlareAngle = 45; % wingtip fold angle in degrees
+function model = CantileverFFWT(FoldAngle,FlareAngle)
 
 BarThickness = 4e-3;
 BarWidth = 25e-3;
@@ -71,26 +66,4 @@ con.add(mainBeam);
 model = baff.Model;
 model.AddElement(con);
 model.UpdateIdx();
-
-%% plot the model
-f = figure(1);
-clf;
-hold on
-model.draw();
-ax = gca;
-ax.Clipping = false;
-ax.ZAxis.Direction = "reverse";
-axis equal
-
-%% Convert to FE Model
-fe = ads.baff.baff2fe(model);
-fe.AeroSurfaces.SetPanelNumbers(4,1,'Span')
-
-f = figure(2);
-clf;
-hold on
-fe.draw();
-ax = gca;
-ax.Clipping = false;
-ax.ZAxis.Direction = "reverse";
-axis equal
+end
