@@ -1,11 +1,10 @@
-function [fe,AnchorPoints] = wing2fe(obj,opts)
+function [fe,AnchorPoints] = wing2fe(obj)
 arguments
     obj baff.Wing
-    opts.BeamElements = 10;
 end
 % generate underlying beam FE
-[fe,AnchorPoints] = beam2fe(obj,"NumElements",opts.BeamElements);
-Etas = GetDiscreteEta(obj,opts.BeamElements);
+[fe,AnchorPoints] = beam2fe(obj);
+Etas = GetDiscreteEta(obj);
 
 % get interpolated AeroSections
 CS = fe.CoordSys(1);

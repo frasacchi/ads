@@ -1,7 +1,6 @@
-function [fe,AnchorPoints] = beam2fe(obj,opts)
+function [fe,AnchorPoints] = beam2fe(obj)
 arguments
     obj baff.Beam
-    opts.NumElements = 10;
 end
 %BEAM2FE baff beam to fe component
 %   Detailed explanation goes here
@@ -20,7 +19,7 @@ end
 obj.Stations = obj.Stations(st_idx);
 
 % get dicretised Eta positions
-Etas = GetDiscreteEta(obj,opts.NumElements);
+Etas = GetDiscreteEta(obj);
 nodes = zeros(3,length(Etas));
 for i = 1:length(nodes)
     nodes(:,i) = obj.GetPos(Etas(i));
