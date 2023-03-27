@@ -5,8 +5,7 @@ classdef BeamStation
     properties
         Point ads.fe.Point
         A = 1;
-        Ixx = 0;
-        Izz = 0;
+        I = eye(3);
         Mat ads.fe.Material = ads.fe.Material.Aluminium;
     end
     methods
@@ -15,30 +14,31 @@ classdef BeamStation
                 Point ads.fe.Point
                 opts.Mat = ads.fe.Material.Aluminium;
                 opts.A = 1;
-                opts.Ixx = 1;
+                opts.I = eye(3);
                 opts.Izz = 1;
             end
             obj.Point = Point;
             obj.A = opts.A;
-            obj.Ixx = opts.Ixx;
-            obj.Izz = opts.Izz;
             obj.Mat = opts.Mat;
         end
         function matSec = ToMatranSection(obj,startPoint,endPoint)
             eta = dot(endPoint-startPoint,obj.Point.X-startPoint)/norm(endPoint-startPoint).^2;
-            matSec = mni.printing.cards.BeamSection(obj.A,obj.Izz,obj.Ixx,0,obj.Izz+obj.Ixx,eta);
+            eta = round(eta,10); % sometimes numerical rounding errors make a 1 not a one...
+            matSec = mni.printing.cards.BeamSection(obj.A,obj.I(3,3),obj.I(1,1),0,obj.I(2,2),eta);
         end
     end
     methods(Static)
         function obj = Bar(Point,height,width,opts)
-        arguments
-            Point
-            height
-            width
-            opts.Mat = ads.fe.Material.Aluminium;
-        end
-        obj = ads.fe.BeamStation(Point,Ixx=height^3*width/12,Izz=width^3*height/12,...
-            A=height*width, Mat = opts.Mat);
+            arguments
+                Point
+                height
+                width
+                opts.Mat = ads.fe.Material.Aluminium;
+            end
+            Ixx=height^3*width/12;
+            Izz=width^3*height/12;
+            I = diag([Ixx,Ixx+Izz,Izz]);
+            obj = ads.fe.BeamStation(Point,I=I,A=height*width, Mat=opts.Mat);
         end
         function obj = FromBaffStation(st,p,Mat)
             arguments
@@ -46,7 +46,7 @@ classdef BeamStation
                 p ads.fe.Point
                 Mat ads.fe.Material
             end
-            obj = ads.fe.BeamStation(p,"A",st.A,"Ixx",st.Ixx,"Izz",st.Izz,"Mat",Mat);
+            obj = ads.fe.BeamStation(p,"A",st.A,"I",st.I,"Mat",Mat);
         end
     end
 end

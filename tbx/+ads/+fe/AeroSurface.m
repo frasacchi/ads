@@ -82,7 +82,7 @@ classdef AeroSurface < ads.fe.Element
                 ids.SID = ids.SID + 3;
             end
         end
-        function plt_obj = draw(obj)
+        function plt_obj = drawElement(obj)
             if isempty(obj)
                 plt_obj = [];
                 return;

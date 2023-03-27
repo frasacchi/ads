@@ -19,7 +19,7 @@ classdef RigidBar < ads.fe.Element
                 ids.EID = ids.EID + 1;
             end
         end
-        function plt_obj = draw(obj)
+        function plt_obj = drawElement(obj)
             arguments
                 obj
             end

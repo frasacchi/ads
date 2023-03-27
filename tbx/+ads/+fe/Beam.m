@@ -26,7 +26,7 @@ classdef Beam < ads.fe.Element
                 ids.PID = ids.PID + 1;
             end
         end
-        function plt_obj = draw(obj)
+        function plt_obj = drawElement(obj)
             arguments
                 obj
             end

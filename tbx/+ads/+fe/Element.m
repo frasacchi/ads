@@ -17,7 +17,7 @@ classdef Element < matlab.mixin.Heterogeneous & handle
         end
         function ToFE(obj)
         end
-        function plt_obj = draw(obj)
+        function plt_obj = drawElement(obj)
             plt_obj = [];
         end
         function ids = UpdateID(obj,ids)

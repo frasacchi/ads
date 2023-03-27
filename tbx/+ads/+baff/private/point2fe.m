@@ -1,7 +1,8 @@
-function [fe,AnchorPoints] = point2fe(obj)
-arguments
-    obj baff.Point
-end
+function fe = point2fe(obj,baffOpts)
+    arguments
+        obj
+        baffOpts = ads.baff.BaffOpts();
+    end
 fe = ads.fe.Component();
 fe.Name = obj.Name;
 fe.CoordSys(1) = ads.fe.CoordSys("Origin",obj.Offset,"A",obj.A);
@@ -9,7 +10,7 @@ CS = fe.CoordSys(1);
 
 % generate nodes
 for i = 1:length(obj)  
-    fe.Points(i) = ads.fe.Point([0;0;0],"InputCoordSys",CS,"JointType",ads.fe.JointType.Rigid);
+    fe.Points(i) = ads.fe.Point([0;0;0],"InputCoordSys",CS);
 end
 
 % generate Force and moments at each point
@@ -21,8 +22,5 @@ for i = 1:length(obj)
         fe.Moments(i) = ads.fe.Moment(obj(i).Moment,fe.Points(i));
     end
 end
-
-% gen Anchor points
-AnchorPoints = fe.Points(1:end);
 end
 

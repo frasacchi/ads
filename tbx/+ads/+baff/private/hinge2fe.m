@@ -1,7 +1,8 @@
-function [fe,AnchorPoints] = hinge2fe(obj)
-arguments
-    obj baff.Hinge
-end
+function fe = hinge2fe(obj,baffOpts)
+    arguments
+        obj
+        baffOpts = ads.baff.BaffOpts();
+    end
 fe = ads.fe.Component();
 fe.Name = obj.Name;
 
@@ -26,11 +27,10 @@ fe.CoordSys(2) = ads.fe.CoordSys("Origin",obj.Offset,"A",obj.A*A);
 for i = 1:2
     fe.Points(i) = ads.fe.Point(zeros(3,1),InputCoordSys=fe.CoordSys(2),OutputCoordSys=fe.CoordSys(2));
 end
-fe.Points(1).JointType = ads.fe.JointType.Rigid;
-AnchorPoints = fe.Points(end);
+fe.Points(1).isAttachmentPoint = false;
+fe.Points(2).isAnchorPoint = false;
 
 %generate hinge
-h = ads.fe.Hinge(fe.Points(1:end),fe.CoordSys(2),obj.K,obj.C,isLocked=obj.isLocked);
-fe.Hinges(1) = h;
+fe.Hinges(1) = ads.fe.Hinge(fe.Points(1:end),fe.CoordSys(2),obj.K,obj.C,isLocked=obj.isLocked);
 end
 

@@ -1,6 +1,7 @@
-function [fe,AnchorPoints] = beam2fe(obj)
+function fe = beam2fe(obj,baffOpts)
 arguments
-    obj baff.Beam
+    obj
+    baffOpts = ads.baff.BaffOpts();
 end
 %BEAM2FE baff beam to fe component
 %   Detailed explanation goes here
@@ -21,18 +22,14 @@ obj.Stations = obj.Stations(st_idx);
 % get dicretised Eta positions
 Etas = GetDiscreteEta(obj);
 nodes = zeros(3,length(Etas));
-for i = 1:length(nodes)
+for i = 1:length(Etas)
     nodes(:,i) = obj.GetPos(Etas(i));
 end
 
 % generate nodes
-for i = 1:length(nodes)
+for i = 1:length(Etas)
     fe.Points(i) = ads.fe.Point(nodes(:,i),InputCoordSys=CS);
-    if i==1
-        fe.Points(i).JointType = ads.fe.JointType.Rigid;
-    end
 end
-AnchorPoints = fe.Points(1:end);
 
 % check if material is stiff
 if obj.Stations(1).Mat.E == inf

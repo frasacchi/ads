@@ -3,8 +3,8 @@ classdef Point   < matlab.mixin.SetGet & ads.fe.Element
         InputCoordSys = ads.fe.BaseCoordSys.get;
         OutputCoordSys = ads.fe.BaseCoordSys.get;
         X (3,1) double
-        DoFs = 123456;
-        JointType = ads.fe.JointType.None;
+        isAttachmentPoint = true; % can children attach to this point
+        isAnchorPoint = true; % can parents attach to this point
         ID double = nan;
     end
     properties(Dependent)
@@ -21,16 +21,16 @@ classdef Point   < matlab.mixin.SetGet & ads.fe.Element
                 X (3,1) double
                 opts.InputCoordSys ads.fe.AbsCoordSys = ads.fe.BaseCoordSys.get;
                 opts.OutputCoordSys ads.fe.AbsCoordSys = ads.fe.BaseCoordSys.get;
-                opts.DoFs = 123456
-                opts.JointType = ads.fe.JointType.None;
+                opts.isAnchor = true;
+                opts.isAttachment = true;
             end
             %POINT Construct an instance of this class
             %   Detailed explanation goes here
             obj.X = X;
             obj.InputCoordSys = opts.InputCoordSys;
             obj.OutputCoordSys = opts.OutputCoordSys;
-            obj.DoFs = opts.DoFs;
-            obj.JointType = opts.JointType;
+            obj.isAnchorPoint = opts.isAnchor;
+            obj.isAttachmentPoint = opts.isAttachment;
         end
         function ids = UpdateID(obj,ids)
             for i = 1:length(obj)
@@ -38,7 +38,7 @@ classdef Point   < matlab.mixin.SetGet & ads.fe.Element
                 ids.GID = ids.GID + 1;
             end
         end
-        function plt_obj = draw(obj)
+        function plt_obj = drawElement(obj)
             arguments
                 obj
             end

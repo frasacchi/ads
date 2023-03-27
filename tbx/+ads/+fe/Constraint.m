@@ -19,14 +19,18 @@ classdef Constraint < ads.fe.Element
                 ids.SID = ids.SID + 1;
             end
         end
-        function plt_obj = draw(obj)
+        function plt_obj = drawElement(obj)
             arguments
                 obj
             end
+            if isempty(obj)
+                plt_obj = [];
+                return
+            end
             ps = [obj.Point];
             Xs = [ps.GlobalPos];
-            plt_obj = plot3(Xs(1,:),Xs(2,:),Xs(3,:),'m^');
-            plt_obj.MarkerFaceColor = 'm';
+            plt_obj = plot3(Xs(1,:),Xs(2,:),Xs(3,:),'c^');
+            plt_obj.MarkerFaceColor = 'c';
             plt_obj.Tag = "Constraint";
         end
         function Export(obj,fid)

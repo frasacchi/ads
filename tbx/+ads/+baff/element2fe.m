@@ -1,8 +1,14 @@
-function fe = element2fe(obj)
-[fe,AnchorPoints] = ads.baff.ElementFactory(obj);
+function fe = element2fe(obj,baffOpts)
+    arguments
+        obj
+        baffOpts = ads.baff.BaffOpts();
+    end
+fe = ads.baff.ElementFactory(obj,baffOpts);
+AttachmentPoints = fe.Points([fe.Points.isAttachmentPoint]);
 %generate FE for Children
 for i = 1:length(obj.Children)
     fe_comp = ads.baff.element2fe(obj.Children(i));
+    AnchorPoints = fe_comp.Points([fe_comp.Points.isAnchorPoint]);
     %update coordinate systems to ref parent
     for j = 1:length(fe_comp.CoordSys)
         % update coordinate systems to ref parent
@@ -25,19 +31,37 @@ for i = 1:length(obj.Children)
     end
 
     % join
-    Xs = [AnchorPoints.GlobalPos];
-    for k = 1:length(fe_comp.Points)
-        if fe_comp.Points(k).JointType ~= ads.fe.JointType.None
-            delta = vecnorm(Xs-repmat(fe_comp.Points(k).GlobalPos,1,size(Xs,2)));
-            [~,idx] = min(delta);
-            switch fe_comp.Points(k).JointType
-                case ads.fe.JointType.Rigid
-                    fe.RigidBars(end+1) = ads.fe.RigidBar(AnchorPoints(idx),fe_comp.Points(k));
-                otherwise
-                    error('Joint Type Not Implememnted')
-            end
+    %find mnimium distance between Parents Attachments points and childs
+    %anchor points
+    if isempty(AttachmentPoints) || isempty(AnchorPoints)
+        error('No availible points to attach the child (%s) to the parent (%s)',obj.Name,obj.Children(i).Name)
+    end
+    XsAnchor = [AnchorPoints.GlobalPos];
+    XsAttach = [AttachmentPoints.GlobalPos];
+    dist = inf;
+    for Attach_i = 1:length(AttachmentPoints)
+        tmp_dist = XsAnchor-repmat(XsAttach(:,Attach_i),1,size(XsAnchor,2));
+        [tmp_dist,Anchor_j] = min(vecnorm(tmp_dist));
+        if tmp_dist<dist
+            dist = tmp_dist;
+            index = [Attach_i,Anchor_j];
         end
     end
+    fe.RigidBars(end+1) = ads.fe.RigidBar(AttachmentPoints(index(1)),AnchorPoints(index(2)));
+
+%     Xs = [AnchorPoints.GlobalPos];
+%     for k = 1:length(fe_comp.Points)
+%         if fe_comp.Points(k).JointType ~= ads.fe.JointType.None
+%             delta = vecnorm(Xs-repmat(fe_comp.Points(k).GlobalPos,1,size(Xs,2)));
+%             [~,idx] = min(delta);
+%             switch fe_comp.Points(k).JointType
+%                 case ads.fe.JointType.Rigid
+%                     fe.RigidBars(end+1) = ads.fe.RigidBar(AnchorPoints(idx),fe_comp.Points(k));
+%                 otherwise
+%                     error('Joint Type Not Implememnted')
+%             end
+%         end
+%     end
     fe.Components(end+1) = fe_comp;
 end
 fe.UpdateTag(obj.Name);

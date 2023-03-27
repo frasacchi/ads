@@ -1,21 +1,23 @@
-function [fe,AnchorPoints] = ElementFactory(obj)
-%ELEMENTFACTORY Summary of this function goes here
-%   Detailed explanation goes here
+function fe = ElementFactory(obj,baffOpts)
+arguments
+    obj
+    baffOpts = ads.baff.BaffOpts();
+end
 switch class(obj)
     case 'baff.Beam'
-        [fe,AnchorPoints] = beam2fe(obj);
+        fe = beam2fe(obj,baffOpts);
     case 'baff.BluffBody'
-        [fe,AnchorPoints] = bluff2fe(obj);
+        fe = bluff2fe(obj,baffOpts);
     case 'baff.Constraint'
-        [fe,AnchorPoints] = constraint2fe(obj);
+        fe = constraint2fe(obj,baffOpts);
     case 'baff.Hinge'
-        [fe,AnchorPoints] = hinge2fe(obj);
+        fe = hinge2fe(obj,baffOpts);
     case 'baff.Mass'
-        [fe,AnchorPoints] = mass2fe(obj);
+        fe = mass2fe(obj,baffOpts);
     case 'baff.Point'
-        [fe,AnchorPoints] = point2fe(obj);
+        fe = point2fe(obj,baffOpts);
     case 'baff.Wing'
-        [fe,AnchorPoints] = wing2fe(obj);
+        fe = wing2fe(obj,baffOpts);
     otherwise
         error('No Method availble for baff type %s',class(obj))
 end
