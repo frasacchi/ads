@@ -56,8 +56,8 @@ end
     for i = 1:length(includes)
         mni.printing.cards.INCLUDE(includes(i)).writeToFile(fid);
     end
-    % Write Main SPC
-    mni.printing.cards.SPCADD(obj.SPC_ID,obj.SPCs).writeToFile(fid);
+    %write Boundary Conditions
+    obj.write_boundary_conditions(fid);
     % genric options 
     mni.printing.cards.PARAM('POST','i',0).writeToFile(fid);
     mni.printing.cards.PARAM('AUTOSPC','s','YES').writeToFile(fid);

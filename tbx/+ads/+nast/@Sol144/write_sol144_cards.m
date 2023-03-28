@@ -1,7 +1,8 @@
-function write_sol144_cards(obj,trimFile)
+function write_sol144_cards(obj,trimFile,trimObjs)
 arguments
     obj
     trimFile string
+    trimObjs = [];
 end
     fid = fopen(trimFile,"w");
     mni.printing.bdf.writeFileStamp(fid)
@@ -47,6 +48,14 @@ end
                 labels = [labels,{trim_obj.Name},{trim_obj.Value}];
             end
         end    
+    end
+    for i = 1:length(trimObjs)
+        trim_obj = trimObjs(i);
+        if ~isempty(trim_obj.Link)
+            mni.printing.cards.AELINK(trim_obj.Name,{trim_obj.Link}).writeToFile(fid);
+        elseif ~isnan(trim_obj.Value)
+            labels = [labels,{trim_obj.Name},{trim_obj.Value}];
+        end
     end
 
     % write trim card

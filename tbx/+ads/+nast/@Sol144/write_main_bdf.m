@@ -4,6 +4,7 @@ arguments
     filename string
     includes (:,1) string
     opts.OutputAeroMatrices logical = false
+    opts.trimObjs = [];
 end
     fid = fopen(filename,"w");
     mni.printing.bdf.writeFileStamp(fid)
@@ -49,8 +50,8 @@ end
     for i = 1:length(includes)
         mni.printing.cards.INCLUDE(includes(i)).writeToFile(fid);
     end
-    % Write Main SPC
-    mni.printing.cards.SPCADD(obj.SPC_ID,obj.SPCs).writeToFile(fid);
+    %write Boundary Conditions
+    obj.write_boundary_conditions(fid);
     % write GRAV + loads
     mni.printing.bdf.writeComment(fid,'Gravity Card')
     mni.printing.bdf.writeColumnDelimiter(fid,'8');

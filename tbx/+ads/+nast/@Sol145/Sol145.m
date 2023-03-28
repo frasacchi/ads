@@ -6,7 +6,6 @@ classdef Sol145 < handle
         % generic aero parameters
         Name = 'SOL145';
         LoadFactor = 1;
-        DoFs = [];
         V = 0;
         rho = 0;
         Mach = 0;
@@ -34,11 +33,13 @@ classdef Sol145 < handle
         SPCs = [];
         ReducedFreqs = [0.01,0.05,0.1,0.2,0.5,0.75,1,2,4];
 
-        %CoM and constraint Paramters
-        CoM_gp = 1;
-        CoM_GID = 99999999;
-        CoM_Cp = [];
-        CoM = [0;0;0];
+        % CoM Info for Boundary Constraints
+        isFree = false; % if is Free a Boundary condition will be applied to  the Centre of Mass
+        CoM = ads.fe.Point.empty;
+        DoFs = [];
+        CoM_SPC_ID = 10;
+        CoM_GID = 1;
+        CoM_RBE_ID = 1; 
     end
     
     methods
@@ -49,7 +50,12 @@ classdef Sol145 < handle
                 obj.Flfact_rho_id = ids.SID+3;
                 obj.EigR_ID = ids.SID + 4;
                 obj.SPC_ID = ids.SID + 5;
-                ids.SID = ids.SID + 6;
+                obj.CoM_SPC_ID = ids.SID + 6;
+                ids.SID = ids.SID + 7;
+                obj.CoM_GID = ids.GID;
+                ids.GID = ids.GID + 1;
+                obj.CoM_RBE_ID = ids.EID;
+                ids.EID = ids.EID + 1;
         end
         function str = config_string(obj)
             str = '';

@@ -19,17 +19,26 @@ classdef Sol103 < handle
         %CoM and constraint Paramters
         g = 9.81;
         Grav_Vector = [0;0;1];
-        CoM_gp = 1;
-        CoM_GID = 99999999;
-        CoM_Cp = [];
-        CoM = [0;0;0];
+
+        % CoM Info for Boundary Constraints
+        isFree = false; % if is Free a Boundary condition will be applied to  the Centre of Mass
+        CoM = ads.fe.Point.empty;
+        DoFs = [];
+        CoM_SPC_ID = 10;
+        CoM_GID = 1;
+        CoM_RBE_ID = 1; 
     end
     
     methods
         function ids = UpdateID(obj,ids)
                 obj.EigR_ID = ids.SID;
                 obj.SPC_ID = ids.SID + 1;
-                ids.SID = ids.SID + 2;
+                obj.CoM_SPC_ID = ids.SID + 2;
+                ids.SID = ids.SID + 3;
+                obj.CoM_GID = ids.GID;
+                ids.GID = ids.GID + 1;
+                obj.CoM_RBE_ID = ids.EID;
+                ids.EID = ids.EID + 1;
         end
         function str = config_string(obj)
             str = '';

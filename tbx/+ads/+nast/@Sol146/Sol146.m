@@ -6,7 +6,6 @@ classdef Sol146 < handle
         % generic aero parameters
         Name = 'Default SOL146: ';
         LoadFactor = 1;
-        DoFs = [];
         V = 0;
         rho = 0;
         Mach = 0;
@@ -43,11 +42,13 @@ classdef Sol146 < handle
         SPCs = [];
         ReducedFreqs = [0.01,0.05,0.1,0.2,0.5,0.75,1,2,4];
 
-        %CoM and constraint Paramters
-        CoM_gp = 1;
-        CoM_GID = 99999999;
-        CoM_Cp = [];
-        CoM = [0;0;0];
+        % CoM Info for Boundary Constraints
+        isFree = false; % if is Free a Boundary condition will be applied to  the Centre of Mass
+        CoM = ads.fe.Point.empty;
+        DoFs = [];
+        CoM_SPC_ID = nan;
+        CoM_GID = nan;
+        CoM_RBE_ID = nan; 
     end
     
     methods
@@ -61,7 +62,12 @@ classdef Sol146 < handle
                 obj.EigR_ID = ids.SID + 3;
                 obj.SPC_ID = ids.SID + 4;
                 obj.DAREA_ID = ids.SID + 5;
-                ids.SID = ids.SID + 6;
+                obj.CoM_SPC_ID = ids.SID + 6;
+                ids.SID = ids.SID + 7;
+                obj.CoM_GID = ids.GID;
+                ids.GID = ids.GID + 1;
+                obj.CoM_RBE_ID = ids.EID;
+                ids.EID = ids.EID + 1;
                 ids = obj.Gusts.UpdateID(ids);
         end
         function str = config_string(obj)

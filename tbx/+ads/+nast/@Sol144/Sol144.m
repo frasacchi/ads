@@ -20,7 +20,6 @@ classdef Sol144 < handle
         URDD6 = ads.nast.TrimParameter('URDD6',0,'Rigid Body');
 
         LoadFactor = 1;
-        DoFs = [];
         V = 0;
         rho = 0;
         Mach = 0;
@@ -49,10 +48,14 @@ classdef Sol144 < handle
         %CoM and constraint Paramters
         g = 9.81;
         Grav_Vector = [0;0;1];
-        CoM_gp = 1;
-        CoM_GID = 99999999;
-        CoM_Cp = [];
-        CoM = [0;0;0];
+
+        % CoM Info for Boundary Constraints
+        isFree = false; % if is Free a Boundary condition will be applied to  the Centre of Mass
+        CoM = ads.fe.Point.empty;
+        DoFs = [];
+        CoM_SPC_ID = 10;
+        CoM_GID = 1;
+        CoM_RBE_ID = 1; 
     end
     
     methods
@@ -62,7 +65,12 @@ classdef Sol144 < handle
                 obj.SPC_ID = ids.SID + 2;
                 obj.Grav_ID = ids.SID + 3;
                 obj.Load_ID = ids.SID + 4;
-                ids.SID = ids.SID + 5;
+                obj.CoM_SPC_ID = ids.SID + 5;
+                ids.SID = ids.SID + 6;
+                obj.CoM_GID = ids.GID;
+                ids.GID = ids.GID + 1;
+                obj.CoM_RBE_ID = ids.EID;
+                ids.EID = ids.EID + 1;
         end
         function str = config_string(obj)
             str = '';

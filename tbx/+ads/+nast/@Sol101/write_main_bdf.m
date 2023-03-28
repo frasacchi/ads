@@ -41,10 +41,8 @@ mni.printing.cards.PARAM('AUNITS','r',0.1019716).writeToFile(fid);
 mni.printing.cards.MDLPRM('HDF5','i',0).writeToFile(fid);
 
 
-% Write Main SPC
-mni.printing.bdf.writeComment(fid,'Main SPC Card');
-mni.printing.bdf.writeColumnDelimiter(fid,'8');
-mni.printing.cards.SPCADD(obj.SPC_ID,obj.SPCs).writeToFile(fid);
+%write Boundary Conditions
+obj.write_boundary_conditions(fid);
 %Write Main Load Card
 %write gravity card
 mni.printing.bdf.writeComment(fid,'Gravity Card')
