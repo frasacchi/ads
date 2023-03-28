@@ -7,6 +7,7 @@ arguments
     opts.NumAttempts = 3;
     opts.BinFolder string = '';
     opts.OutputAeroMatrices logical = false;
+    opts.trimObjs = [];
 end
 
 %% create BDFs
@@ -16,7 +17,7 @@ modelFile = string(fullfile(pwd,binFolder,'Source','Model','model.bdf'));
 feModel.Export(modelFile);
 % create flutter cards
 trimFile = string(fullfile(pwd,binFolder,'Source','trim.bdf'));
-obj.write_sol144_cards(trimFile);
+obj.write_sol144_cards(trimFile,opts.trimObjs);
 
 % extract SPC IDs
 if ~isempty(feModel.Constraints)
