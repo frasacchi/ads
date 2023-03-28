@@ -23,16 +23,39 @@ for i = 1:length(Etas)
     fe.Points(end+1) = ads.fe.Point(X+X_te, InputCoordSys=CS,isAnchor=false,isAttachment=false);
     fe.RigidBars(end+1) = ads.fe.RigidBar(Pa,fe.Points(end));
 end
+%% update aerosurface list to include breaks for control surfaces
+% find all etas
+etas = [obj.AeroStations.Eta];
+for i = 1:length(obj.ControlSurfaces)
+    etas = [etas,(obj.ControlSurfaces(i).Etas)'];
+end
+etas = unique(etas);
+aeroStations = obj.AeroStations.interpolate(etas);
 %% Add aero surfaces
-for i = 1:(length(obj.AeroStations)-1)
-    bls = [obj.AeroStations(i:(i+1)).BeamLoc];
-    cs = [obj.AeroStations(i:(i+1)).Chord];
-    Etas = [obj.AeroStations(i:(i+1)).Eta];
-    Twists = [obj.AeroStations(i:(i+1)).Twist];
+%create surfaces
+for i = 1:(length(aeroStations)-1)
+    bls = [aeroStations(i:(i+1)).BeamLoc];
+    cs = [aeroStations(i:(i+1)).Chord];
+    Etas = [aeroStations(i:(i+1)).Eta];
+    Twists = [aeroStations(i:(i+1)).Twist];
     Xs = [obj.GetPos(Etas(1)),obj.GetPos(Etas(2))];
     fe.AeroSurfaces(i) = ads.fe.AeroSurface(Xs,bls,cs,StructuralPoints=fe.Points,...
         CoordSys=CS,Twists=Twists); 
 end
 
+%% Add control surfaces to the aerosurfaces
+for i = 1:length(obj.ControlSurfaces)
+    if obj.ControlSurfaces(i).pChord(1) ~=  obj.ControlSurfaces(i).pChord(2)
+        error('For MSC Nastran the control surface must be a constant percentage of the chord')
+    end
+    fe.ControlSurfaces(i) = ads.fe.ControlSurface(obj.ControlSurfaces(i).Name);
+    idx = 0;
+    for j = 1:(length(aeroStations)-1)
+        if aeroStations(j).Eta >= obj.ControlSurfaces(i).Etas(1) && aeroStations(j).Eta < obj.ControlSurfaces(i).Etas(2)
+            fe.AeroSurfaces(j).HingeEta = (1-obj.ControlSurfaces.pChord(1));
+            idx = idx + 1;
+            fe.ControlSurfaces(i).AeroSurfaces(idx) = fe.AeroSurfaces(j);
+        end
+    end
 end
 

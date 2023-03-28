@@ -9,18 +9,57 @@ classdef AeroSurface < ads.fe.Element
         ChordwisePos (2,1) double = [nan nan];
         Chords (2,1) double = [nan nan];
         Twists (2,1) double = [0 0];
-        nSpan (1,1) double = 10;
-        nChord (1,1) double = 4;
+        EtaSpan (1,:) double = linspace(0,1,11);
+        EtaChord (1,:) double = linspace(0,1,5);
         StructuralPoints (:,1) ads.fe.Point;
         DisplacementPoints (:,1) ads.fe.Point;
         ID double = nan;
         PID (1,1) double = nan;
-        SID (3,1) double = [nan,nan,nan];
+        SID (4,1) double = [nan,nan,nan,nan];
         SplineType = 4;
         SplineMeth = 'IPS';
+        HingeEta (1,1) double = nan;        % if not nan specifies the eta value of the hinge for a TE control surface
+    end
+
+    properties(Dependent)
+        nChord
+        nSpan
+    end
+    methods
+        function obj = set.HingeEta(obj,val)
+            obj.HingeEta = val;
+            obj.nChord = obj.nChord; % enforce recalc of etachord
+        end
+        function n = get.nChord(obj)
+            n = length(obj.EtaChord)-1;
+        end
+        function n = get.nSpan(obj)
+            n = length(obj.EtaSpan)-1;
+        end
+        function obj = set.nChord(obj,val)
+            if isnan(obj.HingeEta)
+                obj.EtaChord = linspace(0,1,val+1);
+            else
+                N_main = max(3,round(val*obj.HingeEta));
+                N_tab = max(2,round(val*(1-obj.HingeEta)));
+                etaMain = linspace(0,obj.HingeEta,N_main+1);
+                obj.EtaChord = [etaMain(1:end-1),linspace(obj.HingeEta,1,N_tab+1)];
+            end
+        end
+        function obj = set.nSpan(obj,val)
+            obj.EtaSpan = linspace(0,1,val+1);
+        end
     end
     
     methods
+        function idx = HingeIdx(obj)
+            idx = false(obj.nChord,obj.nSpan);
+            if ~isnan(obj.HingeEta)
+                nMain = nnz(obj.EtaChord<obj.HingeEta);
+                idx(nMain+1:end,:) = true;
+            end
+            idx = idx(:);
+        end
         function obj = AeroSurface(Points,ChordwisePos,Chords,opts)
             arguments
                 Points (3,2) double
@@ -78,8 +117,8 @@ classdef AeroSurface < ads.fe.Element
                 obj(i).PID = ids.PID;
                 ids.PID = ids.PID + 1;
                 % for AELIST and SET1 for spline + 1 extra incase two meshes used
-                obj(i).SID = ids.SID:(ids.SID+2);
-                ids.SID = ids.SID + 3;
+                obj(i).SID = ids.SID:(ids.SID+3);
+                ids.SID = ids.SID + 4;
             end
         end
         function plt_obj = drawElement(obj)
@@ -96,10 +135,29 @@ classdef AeroSurface < ads.fe.Element
                 Y = reshape(Xs(:,2,:),4,[]);
                 Z = reshape(Xs(:,3,:),4,[]);
                 c = repmat(201/255,size(X,2),3);
+                if ~isnan(obj(i).HingeEta)
+                    hIdx = obj(i).HingeIdx();
+                    c(hIdx,:) = repmat([1,0,0],nnz(hIdx),1);
+                end
                 c = reshape(c,size(X,2),1,3);
                 plt_obj(i) = patch('XData', X,'YData', Y,'ZData', Z,...
                     'Tag', 'Aero Panels', 'CData', c,'FaceColor','flat');
             end
+        end
+        function CS = getHingeCoordSys(obj)
+            if isnan(obj.HingeEta)
+                CS = ad.fe.CoordSys.empty;
+                return
+            end
+            Panel_Xs = obj.get_panel_coords();
+            hIdx = find(obj.HingeIdx(),1);
+            HingePanel_Xs = Panel_Xs(:,:,hIdx)';
+            Hy = HingePanel_Xs(:,4)-HingePanel_Xs(:,1);
+            Hy = Hy./norm(Hy);
+            Hz = cross((HingePanel_Xs(:,3)-HingePanel_Xs(:,1)),(HingePanel_Xs(:,4)-HingePanel_Xs(:,2)));
+            Hz = Hz./norm(Hz);
+            Hx = cross(Hy,Hz);
+            CS = ads.fe.CoordSys("Origin",HingePanel_Xs(:,1),"A",[Hx,Hy,Hz],"InputCoord",obj.CoordSys);
         end
         function Xs = get_panel_coords(obj)
             xDirGlobal = obj.AeroCoordSys.getAglobal()*[1;0;0];
@@ -113,8 +171,8 @@ classdef AeroSurface < ads.fe.Element
             V12 = X2-X1;
             V43 = X3-X4;
             V14 = X4-X1;
-            etaChord = linspace(0,1,obj.nChord+1);
-            etaSpan = linspace(0,1,obj.nSpan+1);
+            etaChord = obj.EtaChord;
+            etaSpan = obj.EtaSpan;
             Xs = zeros(4,3,obj.nChord*obj.nSpan);
             idx = 1;
             for j = 1:obj.nSpan
@@ -130,29 +188,10 @@ classdef AeroSurface < ads.fe.Element
             end
         end
         function Xs = get_centroids(obj)
-            xDirGlobal = obj.AeroCoordSys.getAglobal()*[1;0;0];
-            xDirLocal = obj.CoordSys.getAglobal()'*xDirGlobal;
-            X1 = obj.Points(:,1) + [obj.Chords(1)*(obj.ChordwisePos(1)-0.5);0;0];
-            X4 = obj.Points(:,2) + [obj.Chords(2)*(obj.ChordwisePos(2)-0.5);0;0];
-            X1 = X1 - obj.Chords(1)*xDirLocal*0.5;
-            X4 = X4 - obj.Chords(2)*xDirLocal*0.5;
-            X2 = X1 + obj.Chords(1)*xDirLocal;
-            X3 = X4 + obj.Chords(2)*xDirLocal;
-            V12 = X2-X1;
-            V43 = X3-X4;
-            etaChord = linspace(0,1,obj.nChord+2);
-            etaChord = etaChord(2:end-1);
-            etaSpan = linspace(0,1,obj.nSpan+2);
-            etaSpan = etaSpan(2:end-1);
+            Panel_Xs = obj.get_panel_coords();
             Xs = zeros(3,obj.nChord*obj.nSpan);
-            idx = 1;
-            for j = 1:obj.nSpan
-                Vc = interp1([0 1],[V12,V43]',etaSpan(j))';
-                Xle = X1 + (X4-X1)*etaSpan(j);
-                for k = 1:obj.nChord
-                    Xs(:,idx) = Xle + Vc*etaChord(k);
-                    idx = idx + 1;
-                end
+            for i = 1:obj.nChord*obj.nSpan
+                Xs(:,i) = mean(Panel_Xs(:,:,i),1)';
             end
         end
         function Ns = get_normal(obj)
@@ -166,7 +205,7 @@ classdef AeroSurface < ads.fe.Element
         end
         function Export(obj,fid)
             if ~isempty(obj)
-                mni.printing.bdf.writeComment(fid,"CAERO2 : Defines Aerodyanmic Panels");
+                mni.printing.bdf.writeComment(fid,"CAERO1 : Defines Aerodyanmic Panels");
                 mni.printing.bdf.writeColumnDelimiter(fid,"short")
                 angles = {};
                 for i = 1:length(obj)
@@ -177,9 +216,21 @@ classdef AeroSurface < ads.fe.Element
                     X4 = obj(i).CoordSys.getPointGlobal(obj(i).Points(:,2) + [obj(i).Chords(2)*(obj(i).ChordwisePos(2)-0.5);0;0]);
                     X1 = X1 - obj(i).Chords(1)*xDirGlobal*0.5;
                     X4 = X4 - obj(i).Chords(2)*xDirGlobal*0.5;
-                    mni.printing.cards.CAERO1(obj(i).ID,obj(i).PID,X1,X4,...
-                        obj(i).Chords(1),obj(i).Chords(2),1,...
-                        NSPAN=obj(i).nSpan,NCHORD=obj(i).nChord).writeToFile(fid);
+                    if X4(2) < 0 
+                        angles{i} = -angles{i};
+                    end
+                    % if non hinge use nChord and nSpan to define the density of panels
+                    if isnan(obj(i).HingeEta)
+                        mni.printing.cards.CAERO1(obj(i).ID,obj(i).PID,X1,X4,...
+                            obj(i).Chords(1),obj(i).Chords(2),1,...
+                            NSPAN=obj(i).nSpan,NCHORD=obj(i).nChord).writeToFile(fid);
+                    % if a hinge exists use the etaChord list in an AEFACT card to define chordwise density
+                    else
+                        mni.printing.cards.CAERO1(obj(i).ID,obj(i).PID,X1,X4,...
+                            obj(i).Chords(1),obj(i).Chords(2),1,...
+                            NSPAN=obj(i).nSpan,LCHORD=obj(i).SID(4)).writeToFile(fid);
+                        mni.printing.cards.AEFACT(obj(i).SID(4),obj(i).EtaChord).writeToFile(fid);
+                    end
                 end
                 %print DMI entry
                 [~,idx] = sort([obj.ID]);

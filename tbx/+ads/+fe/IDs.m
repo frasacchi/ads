@@ -9,6 +9,7 @@ classdef IDs
         PID = 101;
         SID = 1;
         TID = 1;
+        ControllerID = 1;
     end
 end
 
