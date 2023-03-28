@@ -48,20 +48,20 @@ for i = 1:length(obj.Children)
         end
     end
     fe.RigidBars(end+1) = ads.fe.RigidBar(AttachmentPoints(index(1)),AnchorPoints(index(2)));
-
-%     Xs = [AnchorPoints.GlobalPos];
-%     for k = 1:length(fe_comp.Points)
-%         if fe_comp.Points(k).JointType ~= ads.fe.JointType.None
-%             delta = vecnorm(Xs-repmat(fe_comp.Points(k).GlobalPos,1,size(Xs,2)));
-%             [~,idx] = min(delta);
-%             switch fe_comp.Points(k).JointType
-%                 case ads.fe.JointType.Rigid
-%                     fe.RigidBars(end+1) = ads.fe.RigidBar(AnchorPoints(idx),fe_comp.Points(k));
-%                 otherwise
-%                     error('Joint Type Not Implememnted')
-%             end
-%         end
-%     end
+    % the choosen anchor point cannot be a dependent point on any other rigid bar so flip points where required
+    PointsToFlip = AnchorPoints(index(2));
+    isFlipped = false(1,length(fe_comp.RigidBars));
+    while ~isempty(PointsToFlip)      
+        for j = 1:length(fe_comp.RigidBars)
+            if ~isFlipped(j) && fe_comp.RigidBars(j).Point2 == PointsToFlip(1)
+                fe_comp.RigidBars(j).Point2 = fe_comp.RigidBars(j).Point1;
+                fe_comp.RigidBars(j).Point1 = PointsToFlip(1);
+                PointsToFlip(end+1) = fe_comp.RigidBars(j).Point2;
+                isFlipped(j) = true;
+            end
+        end
+        PointsToFlip = PointsToFlip(2:end);
+    end
     fe.Components(end+1) = fe_comp;
 end
 fe.UpdateTag(obj.Name);
