@@ -13,6 +13,7 @@ classdef Component < handle
         Moments (:,1) ads.fe.Moment = ads.fe.Moment.empty;
         Forces(:,1) ads.fe.Force = ads.fe.Force.empty;
         AeroSurfaces (:,1) ads.fe.AeroSurface = ads.fe.AeroSurface.empty;
+        ControlSurfaces (:,1) ads.fe.ControlSurface = ads.fe.ControlSurface.empty;
         AeroSettings (:,1) ads.fe.AeroSettings = ads.fe.AeroSettings.empty;
     end
     methods

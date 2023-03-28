@@ -4,7 +4,6 @@ classdef Element < matlab.mixin.Heterogeneous & handle
     
     properties
         Name = "";
-        isEtaable logical = false
         Tag = "";
     end
     
@@ -13,7 +12,7 @@ classdef Element < matlab.mixin.Heterogeneous & handle
             
         end
         function Export(obj,fid)
-            warning("Not Implemented")
+            warning("Exporrt Not Implemented for class %s",class(obj));
         end
         function ToFE(obj)
         end

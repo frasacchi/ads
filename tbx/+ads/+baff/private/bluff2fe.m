@@ -20,7 +20,7 @@ end
 obj.Stations = obj.Stations(st_idx);
 
 % get dicretised Eta positions
-Etas = GetDiscreteEta(obj);
+Etas = GetDiscreteEta(obj,baffOpts);
 nodes = zeros(3,length(Etas));
 for i = 1:length(Etas)
     nodes(:,i) = obj.GetPos(Etas(i));

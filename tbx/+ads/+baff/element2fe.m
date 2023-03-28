@@ -7,7 +7,7 @@ fe = ads.baff.ElementFactory(obj,baffOpts);
 AttachmentPoints = fe.Points([fe.Points.isAttachmentPoint]);
 %generate FE for Children
 for i = 1:length(obj.Children)
-    fe_comp = ads.baff.element2fe(obj.Children(i));
+    fe_comp = ads.baff.element2fe(obj.Children(i),baffOpts);
     AnchorPoints = fe_comp.Points([fe_comp.Points.isAnchorPoint]);
     %update coordinate systems to ref parent
     for j = 1:length(fe_comp.CoordSys)

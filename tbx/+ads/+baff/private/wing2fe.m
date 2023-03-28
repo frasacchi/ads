@@ -4,8 +4,8 @@ function fe = wing2fe(obj,baffOpts)
         baffOpts = ads.baff.BaffOpts();
     end
 % generate underlying beam FE
-fe = beam2fe(obj);
-Etas = GetDiscreteEta(obj);
+fe = beam2fe(obj,baffOpts);
+Etas = GetDiscreteEta(obj,baffOpts);
 
 % get interpolated AeroSections
 CS = fe.CoordSys(1);
