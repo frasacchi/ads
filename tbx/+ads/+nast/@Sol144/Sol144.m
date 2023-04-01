@@ -75,7 +75,16 @@ classdef Sol144 < handle
         function str = config_string(obj)
             str = '';
         end
-        function set_trim_steadyLevel(obj,V,rho,Mach)
+        function set_trim_steadyLevel(obj,V,rho,Mach,CoM)
+            arguments
+                obj
+                V
+                rho
+                Mach
+                CoM ads.fe.Point
+            end
+            obj.isFree = true;
+            obj.CoM = CoM;
             obj.V = V;
             obj.rho = rho;
             obj.Mach = Mach;
