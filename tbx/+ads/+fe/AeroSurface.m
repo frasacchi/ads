@@ -264,7 +264,7 @@ classdef AeroSurface < ads.fe.Element
                             case 4
                                 mni.printing.bdf.writeColumnDelimiter(fid,"short")
                                 id = obj(i).ID + (obj(i).nSpan*obj(i).nChord);
-                                mni.printing.cards.SPLINE4(id,obj(i).ID,obj(i).SID(1),obj(i).SID(2),USAGE=usage).writeToFile(fid);
+                                mni.printing.cards.SPLINE4(id,obj(i).ID,obj(i).SID(1),obj(i).SID(2),USAGE=usage,METH=obj(i).SplineMeth).writeToFile(fid);
                                 mni.printing.cards.AELIST(obj(i).SID(1),obj(i).ID:(id-1)).writeToFile(fid);
                                 mni.printing.cards.SET1(obj(i).SID(2),[obj(i).StructuralPoints.ID]).writeToFile(fid);
                                 if splitMesh
@@ -292,7 +292,7 @@ classdef AeroSurface < ads.fe.Element
                                     mni.printing.cards.SET1(obj(i).SID(3),[obj(i).DisplacementPoints.ID]).writeToFile(fid);
                                 end
                             otherwise
-                                error('Unkown Sline Type %.0f',obj(i).SplineType)
+                                error('Unkown Spline Type %.0f',obj(i).SplineType)
 
                         end
                     end
