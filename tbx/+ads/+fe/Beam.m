@@ -6,7 +6,10 @@ classdef Beam < ads.fe.Element
         Stations (:,1) ads.fe.BeamStation
         ID double = nan;
         PID double = nan;
+        G0 ads.fe.Point = ads.fe.Point.empty
         yDir (3,1) double = [1;0;0];
+        ExportType string {mustBeMember(ExportType,{'CBAR','CBEAM'})} = "CBEAM";
+        ExportLongFormat logical = true;
     end
 
     methods
@@ -44,6 +47,15 @@ classdef Beam < ads.fe.Element
             end
         end
         function Export(obj,fid)
+            switch obj.ExportType
+                case "CBEAM"
+                    obj.ExportToCBEAM(fid);
+                case "CBAR"
+                    obj.ExportToCBAR(fid);
+            end
+        end
+        function ExportToCBEAM(obj,fid)
+
             if ~isempty(obj)
                 % print CBEAM elements
                 mni.printing.bdf.writeComment(fid,"CBEAM : Defines a beam element.");
@@ -51,7 +63,11 @@ classdef Beam < ads.fe.Element
                 for i = 1:length(obj)
                     Pa = obj(i).Stations(1).Point;
                     Pb = obj(i).Stations(end).Point;
-                    tmpCard = mni.printing.cards.CBEAM(obj(i).ID,obj(i).PID,Pa.ID,Pb.ID,"X",obj(i).yDir);
+                   if ~isempty(obj(i).G0)
+                        tmpCard = mni.printing.cards.CBEAM(obj(i).ID,obj(i).PID,Pa.ID,Pb.ID,"G0",obj(i).GID);
+                    else
+                        tmpCard = mni.printing.cards.CBEAM(obj(i).ID,obj(i).PID,Pa.ID,Pb.ID,"x",obj(i).yDir);
+                    end
                     tmpCard.writeToFile(fid);
                 end
                 % print PBEAM elements
@@ -66,8 +82,38 @@ classdef Beam < ads.fe.Element
                         matSecs(j) = obj(i).Stations(j).ToMatranSection(Xa,Xb);
                     end
                     %print PBEAM cards
-                    tmpCard = mni.printing.cards.PBEAM(obj(i).PID,obj(i).Stations(1).Mat.ID,matSecs,"K",[0,0]);
-                    tmpCard.LongFormat = true;
+                    tmpCard = mni.printing.cards.PBEAM(obj(i).PID,obj(i).Stations(1).Mat.ID,matSecs);
+                    tmpCard.LongFormat = obj.ExportLongFormat;
+                    tmpCard.writeToFile(fid);
+                end
+            end
+        end
+        function ExportToCBAR(obj,fid)
+            if ~isempty(obj)
+                % print CBEAM elements
+                mni.printing.bdf.writeComment(fid,"CBAR : Defines a beam element.");
+                mni.printing.bdf.writeColumnDelimiter(fid,"short")
+                for i = 1:length(obj)
+                    Pa = obj(i).Stations(1).Point;
+                    Pb = obj(i).Stations(end).Point;
+                   if ~isempty(obj(i).G0)
+                        tmpCard = mni.printing.cards.CBAR(obj(i).ID,obj(i).PID,Pa.ID,Pb.ID,"G0",obj(i).GID);
+                    else
+                        tmpCard = mni.printing.cards.CBAR(obj(i).ID,obj(i).PID,Pa.ID,Pb.ID,"X",obj(i).yDir);
+                    end
+                    tmpCard.writeToFile(fid);
+                end
+                % print PBAR elements
+                mni.printing.bdf.writeComment(fid,"PBAR : Defines the properties of a tapered beam element.");
+                mni.printing.bdf.writeColumnDelimiter(fid,"long")
+                for i = 1:length(obj)
+                    % create matran sections
+                    Xa = obj(i).Stations(1).Point.X;
+                    Xb = obj(i).Stations(end).Point.X;
+                    matSec = obj(i).Stations(1).ToMatranSection(Xa,Xb);
+                    %print PBEAM cards
+                    tmpCard = mni.printing.cards.PBAR(obj(i).PID,obj(i).Stations(1).Mat.ID,matSec);
+                    tmpCard.LongFormat = obj.ExportLongFormat;
                     tmpCard.writeToFile(fid);
                 end
             end
