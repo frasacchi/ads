@@ -24,7 +24,7 @@ classdef BeamStation
         function matSec = ToMatranSection(obj,startPoint,endPoint)
             eta = dot(endPoint-startPoint,obj.Point.X-startPoint)/norm(endPoint-startPoint).^2;
             eta = round(eta,10); % sometimes numerical rounding errors make a 1 not a one...
-            matSec = mni.printing.cards.BeamSection(obj.A,obj.I(3,3),obj.I(1,1),0,obj.I(2,2),eta);
+            matSec = mni.printing.cards.BeamSection(obj.A,obj.I(3,3),obj.I(2,2),0,obj.I(1,1),eta);
         end
     end
     methods(Static)
