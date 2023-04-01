@@ -5,6 +5,7 @@ classdef Point   < matlab.mixin.SetGet & ads.fe.Element
         X (3,1) double
         isAttachmentPoint = true; % can children attach to this point
         isAnchorPoint = true; % can parents attach to this point
+        ExportinGlobal = false; % when true the point is exported in the global coordinate system (when written to a bdf file)
         ID double = nan;
     end
     properties(Dependent)
@@ -56,8 +57,13 @@ classdef Point   < matlab.mixin.SetGet & ads.fe.Element
                 mni.printing.bdf.writeComment(fid,"GRID : Defines the location of a geometric grid point, the directions of its displacement, and its permanent single-point constraints.");
                 mni.printing.bdf.writeColumnDelimiter(fid,"long")
                 for i = 1:length(obj)
-                    tmpCard = mni.printing.cards.GRID(obj(i).ID,obj(i).X,...
-                        "CP",obj(i).InputCoordSys.ID,"CD",obj(i).OutputCoordSys.ID);
+                    if ~obj.ExportinGlobal
+                        tmpCard = mni.printing.cards.GRID(obj(i).ID,obj(i).X,...
+                            "CP",obj(i).InputCoordSys.ID,"CD",obj(i).OutputCoordSys.ID);
+                    else
+                        tmpCard = mni.printing.cards.GRID(obj(i).ID,obj(i).GlobalPos,...
+                            "CD",obj(i).OutputCoordSys.ID);
+                    end
                     tmpCard.LongFormat = true;
                     tmpCard.writeToFile(fid);
                 end
