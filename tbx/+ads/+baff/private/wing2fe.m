@@ -41,6 +41,7 @@ for i = 1:(length(aeroStations)-1)
     Xs = [obj.GetPos(Etas(1)),obj.GetPos(Etas(2))];
     fe.AeroSurfaces(i) = ads.fe.AeroSurface(Xs,bls,cs,StructuralPoints=fe.Points,...
         CoordSys=CS,Twists=Twists); 
+    fe.AeroSurfaces(i).ChordVecs = [-aeroStations(i).StationDir,-aeroStations(i+1).StationDir];
 end
 
 %% Add control surfaces to the aerosurfaces
