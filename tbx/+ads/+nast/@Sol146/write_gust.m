@@ -54,7 +54,7 @@ function write_gust(obj,gustFile)
     mni.printing.cards.DAREA(obj.DAREA_ID,obj.CoM_GID,3,1).writeToFile(fid);
     
     %% Gust Case Properties Section
-    obj.Gusts.write_gust_bdf(fid,obj.DAREA_ID,obj.V);  
+    obj.Gusts.write_gust_bdf(fid,obj.DAREA_ID,obj.V,alt=obj.Alt);  
     fclose(fid);
 end
 function println(fid,string)

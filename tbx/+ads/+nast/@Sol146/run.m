@@ -4,7 +4,7 @@ arguments
     feModel ads.fe.Component
     opts.Silent = true;
     opts.StopOnFatal = false;
-    opts.NumAttempts = 3;
+    opts.NumAttempts = 1;
     opts.BinFolder string = '';
 end
 
@@ -52,6 +52,9 @@ while attempt<opts.NumAttempts+1
     system(command);
     toc;
     cd(current_folder);
+    if ~opts.StopOnFatal
+        break
+    end
     %get Results
     f06_filename = fullfile(binFolder,'bin','sol146.f06');
     f06_file = mni.result.f06(f06_filename);

@@ -9,6 +9,7 @@ classdef Sol146 < handle
         V = 0;
         rho = 0;
         Mach = 0;
+        Alt = 0 ; % altitude in feet (for when gusts spec'ed to CS-25)
         AEQR = 1;
         ACSID = [];
 
@@ -52,8 +53,30 @@ classdef Sol146 < handle
     end
     
     methods
-        function obj = Sol146(CoM_GID)
-            obj.CoM_GID = CoM_GID;
+        function set_trim_steadyLevel(obj,V,rho,Mach,alt)
+            arguments
+                obj
+                V
+                rho
+                Mach
+                alt
+            end
+            obj.isFree = true;
+            obj.V = V;
+            obj.rho = rho;
+            obj.Mach = Mach;
+            obj.DoFs = 35;
+            obj.Alt = alt;
+        end
+        function set_trim_locked(obj,V,rho,Mach)
+            obj.V = V;
+            obj.rho = rho;
+            obj.Mach = Mach;
+            obj.ANGLEA.Value = 0;
+            obj.DoFs = [];
+        end
+        function obj = Sol146(CoM)
+            obj.CoM = CoM;
         end
         function ids = UpdateID(obj,ids)
                 obj.SDAMP_ID = ids.SID;
@@ -72,21 +95,6 @@ classdef Sol146 < handle
         end
         function str = config_string(obj)
             str = '';
-        end
-        function set_trim_steadyLevel(obj,V,rho,Mach)
-            obj.V = V;
-            obj.rho = rho;
-            obj.Mach = Mach;
-            obj.ANGLEA.Value = NaN;
-            obj.URDD3.Value = 0;
-            obj.DoFs = 35;
-        end
-        function set_trim_locked(obj,V,rho,Mach)
-            obj.V = V;
-            obj.rho = rho;
-            obj.Mach = Mach;
-            obj.ANGLEA.Value = 0;
-            obj.DoFs = [];
         end
     end
 end

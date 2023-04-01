@@ -15,6 +15,12 @@ properties
 end
 methods
     function obj = GustSettings(GustAmplitude,GustLength,GustFreq,GustType)
+        arguments
+            GustAmplitude double
+            GustLength double
+            GustFreq double
+            GustType char {mustBeMember(GustType,{'Freq','Length','Length_atmos'})} = 'Freq'
+        end
         obj.Amplitude = GustAmplitude;
         obj.Length = GustLength;
         obj.Freq = GustFreq;
@@ -37,14 +43,21 @@ methods
             fprintf(fid,'DLOAD = %.0f\n',obj(i).DLOAD_id);
         end
     end
-    function obj = set_params(obj,V)
+    function obj = set_params(obj,V,opts)
+        arguments
+            obj
+            V
+            opts.alt = 15000 %altitude in feet
+        end
         for i = 1:length(obj)
             switch obj(i).Type
                 case 'Length'
                     obj(i).Freq = V/obj(i).Length;
                 case 'Length_atmos'
                     obj(i).Freq = V/obj(i).Length;
-                    obj(i).Amplitude = obj(i).Amplitude*(0.5*obj.Length/106.17).^(1/6);
+                    alt = min(max(opts.alt,15000),50000);
+                    w_ref = interp1([0,15e3,60e3],[17.07,13.41,6.36],alt);
+                    obj(i).Amplitude = w_ref*(0.5*obj(i).Length/106.17).^(1/6);
                 case 'Freq'
                     obj(i).Length = V/obj(i).Freq;
                 otherwise
@@ -68,13 +81,20 @@ methods
     %     end
     % end
 
-    function write_gust_bdf(obj,fid,DAREA_id,V)
+    function write_gust_bdf(obj,fid,DAREA_id,V,opts)
+        arguments
+            obj
+            fid
+            DAREA_id
+            V
+            opts.alt = 15000 %altitude in feet
+        end
         for i = 1:length(obj)
             % still to Complete - write gust as two TLOAD2 cards.... (see Ali's examples)
             mni.printing.bdf.writeComment(fid,sprintf('Gust Subcase %.0f Properties',i))
             mni.printing.bdf.writeColumnDelimiter(fid,'8');
             % Gust Signal
-            obj(i).set_params(V);
+            obj(i).set_params(V,'alt',opts.alt);
             mni.printing.cards.TLOAD2(obj(i).TLOAD_id,DAREA_id,'F',0,'T1',obj(i).Tdelay,'T2',obj(i).Tdelay+(1/obj(i).Freq)).writeToFile(fid);
             mni.printing.cards.TLOAD2(obj(i).TLOAD_id+1,DAREA_id,'F',obj(i).Freq,'T1',obj(i).Tdelay,'T2',obj(i).Tdelay+(1/obj(i).Freq)).writeToFile(fid);
             mni.printing.cards.DLOAD(obj(i).DLOAD_id,1,[0.5,-0.5],[obj(i).TLOAD_id,obj(i).TLOAD_id+1]).writeToFile(fid);
