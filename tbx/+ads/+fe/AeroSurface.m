@@ -7,6 +7,7 @@ classdef AeroSurface < ads.fe.Element
         AeroCoordSys (1,1) ads.fe.AbsCoordSys = ads.fe.BaseCoordSys.get;
         Points (3,2) double
         ChordwisePos (2,1) double = [nan nan];
+        ChordVecs (3,2) double = [-1,-1;0,0;0,0];
         Chords (2,1) double = [nan nan];
         Twists (2,1) double = [0 0];
         EtaSpan (1,:) double = linspace(0,1,11);
@@ -19,6 +20,7 @@ classdef AeroSurface < ads.fe.Element
         SplineType = 4;
         SplineMeth = 'IPS';
         HingeEta (1,1) double = nan;        % if not nan specifies the eta value of the hinge for a TE control surface
+        CrossEta = 0.5;
     end
 
     properties(Dependent)
@@ -95,13 +97,13 @@ classdef AeroSurface < ads.fe.Element
             switch Dependent
                 case 'Span'
                     obj(i).nChord = N;
-                    span = abs(obj(i).Points(2,2)-obj(i).Points(2,1));
+                    span = vecnorm(obj(i).Points(:,2)-obj(i).Points(:,1));
                     panelChord = obj(i).Chords(2)/N;
                     panelspan = panelChord*AspectRatio;
                     obj(i).nSpan = ceil(span/panelspan);
                 case 'Chord'
                     obj(i).nSpan = N;
-                    span = abs(obj(i).Points(2,2)-obj(i).Points(2,1));
+                    span = vecnorm(obj(i).Points(:,2)-obj(i).Points(:,1));
                     panelSpan = span/N;
                     panelChord = panelSpan/AspectRatio;
                     obj(i).nChord = ceil(obj(i).Chord(2)/panelChord);
@@ -162,10 +164,10 @@ classdef AeroSurface < ads.fe.Element
         function Xs = get_panel_coords(obj)
             xDirGlobal = obj.AeroCoordSys.getAglobal()*[1;0;0];
             xDirLocal = obj.CoordSys.getAglobal()'*xDirGlobal;
-            X1 = obj.Points(:,1) + [obj.Chords(1)*(obj.ChordwisePos(1)-0.5);0;0];
-            X4 = obj.Points(:,2) + [obj.Chords(2)*(obj.ChordwisePos(2)-0.5);0;0];
-            X1 = X1 - obj.Chords(1)*xDirLocal*0.5;
-            X4 = X4 - obj.Chords(2)*xDirLocal*0.5;
+            P1 = obj.Points(:,1) + obj.ChordVecs(:,1)*obj.Chords(1).*(obj.CrossEta-obj.ChordwisePos(1));
+            P2 = obj.Points(:,2) + obj.ChordVecs(:,2)*obj.Chords(2).*(obj.CrossEta-obj.ChordwisePos(2));
+            X1 = P1 - obj.Chords(1)*xDirLocal*obj.CrossEta;
+            X4 = P2 - obj.Chords(2)*xDirLocal*obj.CrossEta;
             X2 = X1 + obj.Chords(1)*xDirLocal;
             X3 = X4 + obj.Chords(2)*xDirLocal;
             V12 = X2-X1;
@@ -212,10 +214,14 @@ classdef AeroSurface < ads.fe.Element
                     xDirGlobal = obj(i).AeroCoordSys.getAglobal()*[1;0;0];
                     xDirLocal = obj(i).CoordSys.getAglobal()'*xDirGlobal;
                     angles{i} = ones(1,obj(i).nChord*obj(i).nSpan)*(90-acosd(xDirLocal'*[0;0;-1]));
-                    X1 = obj(i).CoordSys.getPointGlobal(obj(i).Points(:,1) + [obj(i).Chords(1)*(obj(i).ChordwisePos(1)-0.5);0;0]);
-                    X4 = obj(i).CoordSys.getPointGlobal(obj(i).Points(:,2) + [obj(i).Chords(2)*(obj(i).ChordwisePos(2)-0.5);0;0]);
-                    X1 = X1 - obj(i).Chords(1)*xDirGlobal*0.5;
-                    X4 = X4 - obj(i).Chords(2)*xDirGlobal*0.5;
+                    P1 = obj(i).Points(:,1) + obj(i).ChordVecs(:,1).*obj(i).Chords(1).*(obj(i).CrossEta-obj(i).ChordwisePos(1));
+                    P2 = obj(i).Points(:,2) + obj(i).ChordVecs(:,2)*obj(i).Chords(2).*(obj(i).CrossEta-obj(i).ChordwisePos(2));
+                    % P1 = obj(i).CoordSys.getPointGlobal(P1);
+                    % P2 = obj(i).CoordSys.getPointGlobal(P2);
+                    % X1 = P1 - obj(i).Chords(1)*xDirGlobal*obj(i).CrossEta;
+                    % X4 = P2 - obj(i).Chords(2)*xDirGlobal*obj(i).CrossEta;
+                    X1 = P1 - obj(i).Chords(1)*xDirLocal*obj(i).CrossEta;
+                    X4 = P2 - obj(i).Chords(2)*xDirLocal*obj(i).CrossEta;
                     if X4(2) < 0 
                         angles{i} = -angles{i};
                     end
@@ -223,13 +229,13 @@ classdef AeroSurface < ads.fe.Element
                     if isnan(obj(i).HingeEta)
                         mni.printing.cards.CAERO1(obj(i).ID,obj(i).PID,X1,X4,...
                             obj(i).Chords(1),obj(i).Chords(2),1,...
-                            NSPAN=obj(i).nSpan,NCHORD=obj(i).nChord).writeToFile(fid);
+                            NSPAN=obj(i).nSpan,NCHORD=obj(i).nChord,CP=obj(i).CoordSys.ID).writeToFile(fid);
                     % if a hinge exists use the etaChord list in an AEFACT card to define chordwise density
                     else
                         mni.printing.cards.CAERO1(obj(i).ID,obj(i).PID,X1,X4,...
                             obj(i).Chords(1),obj(i).Chords(2),1,...
                             NSPAN=obj(i).nSpan,LCHORD=obj(i).SID(4)).writeToFile(fid);
-                        mni.printing.cards.AEFACT(obj(i).SID(4),obj(i).EtaChord).writeToFile(fid);
+                        mni.printing.cards.AEFACT(obj(i).SID(4),obj(i).EtaChord,CP=obj(i).CoordSys.ID).writeToFile(fid);
                     end
                 end
                 %print DMI entry
