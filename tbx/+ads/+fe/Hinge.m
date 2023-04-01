@@ -59,7 +59,7 @@ classdef Hinge < ads.fe.Element
                         mni.printing.bdf.writeColumnDelimiter(fid,"short")
                         mni.printing.cards.RJOINT(obj(i).ID,obj(i).Points(1).ID,obj(i).Points(2).ID,'CB','12356').writeToFile(fid);
                         mni.printing.cards.CBUSH(obj(i).ID+1,obj(i).PID,obj(i).Points(1).ID,...
-                            obj(i).Points(2).ID,'CID',obj(i).Points(1).InputCoordSys.ID).writeToFile(fid);
+                            obj(i).Points(2).ID,'CID',obj(i).CoordSys.ID).writeToFile(fid);
                         mni.printing.cards.PBUSH(obj(i).PID,'K',[0,0,0,obj(i).K,0,0],...
                                 'B',[0,0,0,obj(i).C,0,0]).writeToFile(fid);
                     end
