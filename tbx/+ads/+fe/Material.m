@@ -7,6 +7,7 @@ classdef Material < ads.fe.Element
         G = 0;
         rho = 0;
         nu = 0;
+        Yield = nan;
         ID double = nan;
     end
     
