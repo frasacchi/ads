@@ -20,6 +20,7 @@ classdef BeamStation
             obj.Point = Point;
             obj.A = opts.A;
             obj.Mat = opts.Mat;
+            obj.I = opts.I;
         end
         function matSec = ToMatranSection(obj,startPoint,endPoint)
             eta = dot(endPoint-startPoint,obj.Point.X-startPoint)/norm(endPoint-startPoint).^2;

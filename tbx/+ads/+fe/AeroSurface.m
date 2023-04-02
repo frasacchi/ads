@@ -213,7 +213,17 @@ classdef AeroSurface < ads.fe.Element
                 for i = 1:length(obj)
                     xDirGlobal = obj(i).AeroCoordSys.getAglobal()*[1;0;0];
                     xDirLocal = obj(i).CoordSys.getAglobal()'*xDirGlobal;
-                    angles{i} = ones(1,obj(i).nChord*obj(i).nSpan)*(90-acosd(xDirLocal'*[0;0;-1]));
+                    % get local AoA at each end
+                    n = cross(-obj(i).ChordVecs(:,1),[0;0;1]);
+                    n = n./norm(n);
+                    x_1 = obj(i).ChordVecs(:,1);
+                    angle_1 = atan2(cross(xDirLocal,obj(i).ChordVecs(:,1))'*n,xDirLocal'*obj(i).ChordVecs(:,1));
+                    angle_2 = atan2(cross(xDirLocal,obj(i).ChordVecs(:,2))'*n,xDirLocal'*obj(i).ChordVecs(:,2));
+                    twistEta = linspace(angle_1,angle_2,obj(i).nSpan*2+1);
+                    twistEta = twistEta(2:2:end);
+                    angles{i} = reshape(repmat(twistEta,obj(i).nChord,1),[],1)';
+                    % twists = 
+                    % angles{i} = ones(1,obj(i).nChord*obj(i).nSpan)*(90-acosd(xDirLocal'*[0;0;-1]));
                     P1 = obj(i).Points(:,1) + obj(i).ChordVecs(:,1).*obj(i).Chords(1).*(obj(i).CrossEta-obj(i).ChordwisePos(1));
                     P2 = obj(i).Points(:,2) + obj(i).ChordVecs(:,2)*obj(i).Chords(2).*(obj(i).CrossEta-obj(i).ChordwisePos(2));
                     % P1 = obj(i).CoordSys.getPointGlobal(P1);
@@ -227,15 +237,15 @@ classdef AeroSurface < ads.fe.Element
                     end
                     % if non hinge use nChord and nSpan to define the density of panels
                     if isnan(obj(i).HingeEta)
-                        mni.printing.cards.CAERO1(obj(i).ID,obj(i).PID,X1,X4,...
+                        mni.printing.cards.CAERO1(obj(i).ID,obj(1).PID,X1,X4,...
                             obj(i).Chords(1),obj(i).Chords(2),1,...
                             NSPAN=obj(i).nSpan,NCHORD=obj(i).nChord,CP=obj(i).CoordSys.ID).writeToFile(fid);
                     % if a hinge exists use the etaChord list in an AEFACT card to define chordwise density
                     else
-                        mni.printing.cards.CAERO1(obj(i).ID,obj(i).PID,X1,X4,...
+                        mni.printing.cards.CAERO1(obj(i).ID,obj(1).PID,X1,X4,...
                             obj(i).Chords(1),obj(i).Chords(2),1,...
-                            NSPAN=obj(i).nSpan,LCHORD=obj(i).SID(4)).writeToFile(fid);
-                        mni.printing.cards.AEFACT(obj(i).SID(4),obj(i).EtaChord,CP=obj(i).CoordSys.ID).writeToFile(fid);
+                            NSPAN=obj(i).nSpan,LCHORD=obj(i).SID(4),CP=obj(i).CoordSys.ID).writeToFile(fid);
+                        mni.printing.cards.AEFACT(obj(i).SID(4),obj(i).EtaChord).writeToFile(fid);
                     end
                 end
                 %print DMI entry
@@ -247,9 +257,9 @@ classdef AeroSurface < ads.fe.Element
                 %print aero properties
                 mni.printing.bdf.writeComment(fid,"PAERO1 : Defines Aerodyanmic Properties for panels");
                 mni.printing.bdf.writeColumnDelimiter(fid,"short")
-                for i = 1:length(obj)
-                    mni.printing.cards.PAERO1(obj(i).PID).writeToFile(fid);
-                end
+                % for i = 1:length(obj)
+                mni.printing.cards.PAERO1(obj(1).PID).writeToFile(fid);
+                % end
                 %print aero spline
                 mni.printing.bdf.writeComment(fid,"Aerodynamic Splines: Defined by a SPLINE, AELIST and SET1 card");
                 for i = 1:length(obj)
@@ -284,7 +294,7 @@ classdef AeroSurface < ads.fe.Element
                             case 7
                                 mni.printing.bdf.writeColumnDelimiter(fid,"short")
                                 id = obj(i).ID + (obj(i).nSpan*obj(i).nChord);
-                                mni.printing.cards.SPLINE4(id,obj(i).ID,obj(i).SID(1),obj(i).SID(2),USAGE=usage).writeToFile(fid);
+                                mni.printing.cards.SPLINE7(id,obj(i).ID,obj(i).SID(1),obj(i).SID(2),obj(i).CoordSys.ID,USAGE=usage).writeToFile(fid);
                                 mni.printing.cards.AELIST(obj(i).SID(1),obj(i).ID:(id-1)).writeToFile(fid);
                                 mni.printing.cards.SET1(obj(i).SID(2),[obj(i).StructuralPoints.ID]).writeToFile(fid);
                                 if splitMesh

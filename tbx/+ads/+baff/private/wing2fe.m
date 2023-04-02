@@ -41,7 +41,10 @@ for i = 1:(length(aeroStations)-1)
     Xs = [obj.GetPos(Etas(1)),obj.GetPos(Etas(2))];
     fe.AeroSurfaces(i) = ads.fe.AeroSurface(Xs,bls,cs,StructuralPoints=fe.Points,...
         CoordSys=CS,Twists=Twists); 
-    fe.AeroSurfaces(i).ChordVecs = [-aeroStations(i).StationDir,-aeroStations(i+1).StationDir];
+    vecs = [aeroStations(i).GetPos(nan,1)-aeroStations(i).GetPos(nan,0), ...
+        aeroStations(i+1).GetPos(nan,1)-aeroStations(i+1).GetPos(nan,0)];
+    fe.AeroSurfaces(i).ChordVecs = vecs./repmat(vecnorm(vecs),3,1);
+    fe.AeroSurfaces(i).CrossEta = aeroStations(i).BeamLoc;
 end
 
 %% Add control surfaces to the aerosurfaces

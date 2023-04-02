@@ -57,7 +57,7 @@ classdef Point   < matlab.mixin.SetGet & ads.fe.Element
                 mni.printing.bdf.writeComment(fid,"GRID : Defines the location of a geometric grid point, the directions of its displacement, and its permanent single-point constraints.");
                 mni.printing.bdf.writeColumnDelimiter(fid,"long")
                 for i = 1:length(obj)
-                    if ~obj.ExportinGlobal
+                    if ~obj(i).ExportinGlobal
                         tmpCard = mni.printing.cards.GRID(obj(i).ID,obj(i).X,...
                             "CP",obj(i).InputCoordSys.ID,"CD",obj(i).OutputCoordSys.ID);
                     else

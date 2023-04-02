@@ -47,11 +47,19 @@ classdef Beam < ads.fe.Element
             end
         end
         function Export(obj,fid)
-            switch obj.ExportType
-                case "CBEAM"
-                    obj.ExportToCBEAM(fid);
-                case "CBAR"
-                    obj.ExportToCBAR(fid);
+            names = ["CBEAM","CBAR"];
+            if ~isempty(obj)
+                for i = 1:length(names)
+                    idx= [obj.ExportType] == names(i);
+                    if nnz(idx)>0
+                        switch names(i)
+                            case "CBEAM"
+                                obj(idx).ExportToCBEAM(fid);
+                            case "CBAR"
+                                obj(idx).ExportToCBAR(fid);
+                        end
+                    end
+                end
             end
         end
         function ExportToCBEAM(obj,fid)
@@ -63,7 +71,7 @@ classdef Beam < ads.fe.Element
                 for i = 1:length(obj)
                     Pa = obj(i).Stations(1).Point;
                     Pb = obj(i).Stations(end).Point;
-                   if ~isempty(obj(i).G0)
+                    if ~isempty(obj(i).G0)
                         tmpCard = mni.printing.cards.CBEAM(obj(i).ID,obj(i).PID,Pa.ID,Pb.ID,"G0",obj(i).GID);
                     else
                         tmpCard = mni.printing.cards.CBEAM(obj(i).ID,obj(i).PID,Pa.ID,Pb.ID,"x",obj(i).yDir);
@@ -82,7 +90,7 @@ classdef Beam < ads.fe.Element
                         matSecs(j) = obj(i).Stations(j).ToMatranSection(Xa,Xb);
                     end
                     %print PBEAM cards
-                    tmpCard = mni.printing.cards.PBEAM(obj(i).PID,obj(i).Stations(1).Mat.ID,matSecs);
+                    tmpCard = mni.printing.cards.PBEAM(obj(i).PID,obj(i).Stations(1).Mat.ID,matSecs,K=[1,1]);
                     tmpCard.LongFormat = obj.ExportLongFormat;
                     tmpCard.writeToFile(fid);
                 end
@@ -96,7 +104,7 @@ classdef Beam < ads.fe.Element
                 for i = 1:length(obj)
                     Pa = obj(i).Stations(1).Point;
                     Pb = obj(i).Stations(end).Point;
-                   if ~isempty(obj(i).G0)
+                    if ~isempty(obj(i).G0)
                         tmpCard = mni.printing.cards.CBAR(obj(i).ID,obj(i).PID,Pa.ID,Pb.ID,"G0",obj(i).GID);
                     else
                         tmpCard = mni.printing.cards.CBAR(obj(i).ID,obj(i).PID,Pa.ID,Pb.ID,"X",obj(i).yDir);
