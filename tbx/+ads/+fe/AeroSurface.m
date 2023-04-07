@@ -26,14 +26,32 @@ classdef AeroSurface < ads.fe.Element
     properties(Dependent)
         nChord
         nSpan
+        nPanels
+        CentroidsGlobal
+        Area
     end
     methods
         function obj = set.HingeEta(obj,val)
             obj.HingeEta = val;
             obj.nChord = obj.nChord; % enforce recalc of etachord
         end
+        function n = get.nPanels(obj)
+            n = obj.nSpan * obj.nChord;
+        end
         function n = get.nChord(obj)
             n = length(obj.EtaChord)-1;
+        end
+        function x = get.CentroidsGlobal(obj)
+            x = obj.CoordSys.getPointGlobal(obj.get_centroids());
+        end
+        function a = get.Area(obj)
+            Xs = obj.get_panel_coords;
+            a = ones(1,obj.nPanels);
+            for i = 1:length(a)
+                v1 = Xs(1,:,i) - Xs(3,:,i);
+                v2 = Xs(2,:,i) - Xs(4,:,i);
+                a(i) = 0.5*abs(norm(cross(v2,v1)));
+            end
         end
         function n = get.nSpan(obj)
             n = length(obj.EtaSpan)-1;
@@ -190,10 +208,11 @@ classdef AeroSurface < ads.fe.Element
             end
         end
         function Xs = get_centroids(obj)
+            %get total number of panels
             Panel_Xs = obj.get_panel_coords();
             Xs = zeros(3,obj.nChord*obj.nSpan);
-            for i = 1:obj.nChord*obj.nSpan
-                Xs(:,i) = mean(Panel_Xs(:,:,i),1)';
+            for j = 1:obj.nChord*obj.nSpan
+                Xs(:,j) = mean(Panel_Xs(:,:,j),1)';
             end
         end
         function Ns = get_normal(obj)
@@ -217,8 +236,8 @@ classdef AeroSurface < ads.fe.Element
                     n = cross(-obj(i).ChordVecs(:,1),[0;0;1]);
                     n = n./norm(n);
                     x_1 = obj(i).ChordVecs(:,1);
-                    angle_1 = atan2(cross(xDirLocal,obj(i).ChordVecs(:,1))'*n,xDirLocal'*obj(i).ChordVecs(:,1));
-                    angle_2 = atan2(cross(xDirLocal,obj(i).ChordVecs(:,2))'*n,xDirLocal'*obj(i).ChordVecs(:,2));
+                    angle_1 = atan2d(cross(xDirLocal,obj(i).ChordVecs(:,1))'*n,xDirLocal'*obj(i).ChordVecs(:,1));
+                    angle_2 = atan2d(cross(xDirLocal,obj(i).ChordVecs(:,2))'*n,xDirLocal'*obj(i).ChordVecs(:,2));
                     twistEta = linspace(angle_1,angle_2,obj(i).nSpan*2+1);
                     twistEta = twistEta(2:2:end);
                     angles{i} = reshape(repmat(twistEta,obj(i).nChord,1),[],1)';
@@ -232,7 +251,7 @@ classdef AeroSurface < ads.fe.Element
                     % X4 = P2 - obj(i).Chords(2)*xDirGlobal*obj(i).CrossEta;
                     X1 = P1 - obj(i).Chords(1)*xDirLocal*obj(i).CrossEta;
                     X4 = P2 - obj(i).Chords(2)*xDirLocal*obj(i).CrossEta;
-                    if X4(2) < 0 
+                    if X4(1) < 0 
                         angles{i} = -angles{i};
                     end
                     % if non hinge use nChord and nSpan to define the density of panels
