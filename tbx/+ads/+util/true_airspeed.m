@@ -5,6 +5,6 @@ function [tas] = true_airspeed(M,a,T,T_s)
 %   - T: ambient tempeture to calculate airspeed at
 %   - T_s: reference temperature (sea level)
 %   - gamma: specfic heat ratio
-tas = a.*M.*sqrt(T./T_s);
+tas = a.*M;
 end
 
