@@ -1,17 +1,17 @@
 function [TAS,CAS,rho,a,h] = get_flight_condition(M,opts)
 arguments
     M % Mach number
-    opts.CAS = nan; % calibrated airspeed in m/s
-    opts.alt = nan; % altitude in ft
-    opts.h = nan; % altitude in m
+    opts.CAS = []; % calibrated airspeed in m/s
+    opts.alt = []; % altitude in ft
+    opts.h = []; % altitude in m
 end
-if isnan(opts.alt) && isnan(opts.CAS) && isnan(opts.h)
+if isempty(opts.alt) && isempty(opts.CAS) && isempty(opts.h)
     error('Either CAS, alt or h must be supplied')
 end
-if ~isnan(opts.alt)
+if ~isempty(opts.alt)
     opts.h = 0.3048*opts.alt;
 end
-if ~isnan(opts.CAS)
+if ~isempty(opts.CAS)
     %% create reference data
     x=-1000:100:100000;
     [rho_ref,a_ref,~,P,~,~,~] = atmos(x);

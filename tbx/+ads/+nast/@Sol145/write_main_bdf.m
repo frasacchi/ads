@@ -20,8 +20,28 @@ end
     println(fid,sprintf('FMETHOD = %.0f',obj.FlutterID));
     println(fid,sprintf('METHOD = %.0f',obj.EigR_ID));
     fprintf(fid,'SPC=%.0f\n',obj.SPC_ID);
-    println(fid,'MONITOR = ALL');
-    println(fid,'DISPLACEMENT(SORT1,REAL)=ALL');
+    if ~isempty(obj.DispIDs)
+        if any(isnan(obj.DispIDs))
+            println(fid,'DISPLACEMENT(SORT1,REAL)= NONE');
+        else
+            mni.printing.cases.SET(1,obj.DispIDs).writeToFile(fid);
+            println(fid,'DISPLACEMENT(SORT1,REAL)= 1');
+        end
+    else
+        println(fid,'DISPLACEMENT(SORT1,REAL)= ALL');
+    end
+    if ~isempty(obj.ForceIDs)
+        if any(isnan(obj.ForceIDs))
+            println(fid,'FORCE(SORT1,REAL)= NONE');
+        else
+            mni.printing.cases.SET(2,obj.ForceIDs).writeToFile(fid);
+            println(fid,'FORCE(SORT1,REAL)= 2');
+        end
+    else
+        println(fid,'FORCE(SORT1,REAL)= ALL');
+    end
+    println(fid,'MONITOR = ALL');  
+
     println(fid,'GROUNDCHECK=YES');
     println(fid,'AEROF=ALL');
     println(fid,'APRES=ALL');

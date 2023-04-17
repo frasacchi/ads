@@ -15,8 +15,11 @@ classdef Sol145 < handle
         RefChord = 1;
         RefSpan = 1;
         RefArea = 1;
-        RefDensity = 1.225;
+        RefDensity = 1;
         LModes = 0;
+
+        DispIDs = [];
+        ForceIDs = [];
 
         % freqeuency & Structural Damping Info
         FreqRange = [0.01,50];
@@ -64,16 +67,15 @@ classdef Sol145 < handle
             obj.V = V;
             obj.rho = rho;
             obj.Mach = Mach;
-            obj.ANGLEA.Value = NaN;
-            obj.URDD3.Value = 0;
             obj.DoFs = 35;
+            obj.isFree = true;
         end
         function set_trim_locked(obj,V,rho,Mach)
             obj.V = V;
             obj.rho = rho;
             obj.Mach = Mach;
-            obj.ANGLEA.Value = 0;
             obj.DoFs = [];
+            obj.isFree = true;
         end
     end
 end
