@@ -9,6 +9,12 @@ etas = [obj.Stations.Eta];
 % add eta from all children
 if baffOpts.SplitBeamsAtChildren
     child_eta = [obj.Children.Eta];
+    for i = 1:length(obj.Children)
+        if norm(obj.Children(i).Offset) ~= 0
+            cost = @(x)norm(obj.GetPos(obj.Children(i).Eta +x) - (obj.GetPos(obj.Children(i).Eta) + obj.Children(i).Offset));
+            child_eta(i) = child_eta(i) + fminsearch(cost,0);
+        end
+    end
     etas = unique([etas,child_eta]);
     etas = etas(etas>=0 & etas<=1);
 end

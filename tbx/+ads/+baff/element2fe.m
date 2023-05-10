@@ -47,7 +47,12 @@ for i = 1:length(obj.Children)
             index = [Attach_i,Anchor_j];
         end
     end
-    fe.RigidBars(end+1) = ads.fe.RigidBar(AttachmentPoints(index(1)),AnchorPoints(index(2)));
+    if ~isa(obj.Children(i),'baff.Constraint')
+        fe.RigidBars(end+1) = ads.fe.RigidBar(AttachmentPoints(index(1)),AnchorPoints(index(2)));
+    else
+        fe.RigidBars(end+1) = ads.fe.RigidBar(AnchorPoints(index(2)),AttachmentPoints(index(1)));
+    end
+    
     % the choosen anchor point cannot be a dependent point on any other rigid bar so flip points where required
     PointsToFlip = AnchorPoints(index(2));
     isFlipped = false(1,length(fe_comp.RigidBars));

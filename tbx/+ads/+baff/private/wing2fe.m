@@ -12,6 +12,11 @@ CS = fe.CoordSys(1);
 
 %create LE and TE points at each Beam Node
 for i = 1:length(Etas)
+    if Etas(i)<obj.AeroStations(1).Eta && Etas(i)<obj.AeroStations(end).Eta
+        continue
+    elseif Etas(i)>obj.AeroStations(1).Eta && Etas(i)>obj.AeroStations(end).Eta
+        continue
+    end
     Pa = fe.Points(i);
     X = obj.GetPos(Etas(i));
     % LE

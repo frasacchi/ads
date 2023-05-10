@@ -180,30 +180,32 @@ classdef AeroSurface < ads.fe.Element
             CS = ads.fe.CoordSys("Origin",HingePanel_Xs(:,1),"A",[Hx,Hy,Hz],"InputCoord",obj.CoordSys);
         end
         function Xs = get_panel_coords(obj)
-            xDirGlobal = obj.AeroCoordSys.getAglobal()*[1;0;0];
-            xDirLocal = obj.CoordSys.getAglobal()'*xDirGlobal;
-            P1 = obj.Points(:,1) + obj.ChordVecs(:,1)*obj.Chords(1).*(obj.CrossEta-obj.ChordwisePos(1));
-            P2 = obj.Points(:,2) + obj.ChordVecs(:,2)*obj.Chords(2).*(obj.CrossEta-obj.ChordwisePos(2));
-            X1 = P1 - obj.Chords(1)*xDirLocal*obj.CrossEta;
-            X4 = P2 - obj.Chords(2)*xDirLocal*obj.CrossEta;
-            X2 = X1 + obj.Chords(1)*xDirLocal;
-            X3 = X4 + obj.Chords(2)*xDirLocal;
-            V12 = X2-X1;
-            V43 = X3-X4;
-            V14 = X4-X1;
-            etaChord = obj.EtaChord;
-            etaSpan = obj.EtaSpan;
-            Xs = zeros(4,3,obj.nChord*obj.nSpan);
+            Xs = zeros(4,3,sum([obj.nPanels]));
             idx = 1;
-            for j = 1:obj.nSpan
-                Vc = interp1([0 1],[V12,V43]',etaSpan(j:(j+1)))';
-                Xle = [X1,X1] + [V14,V14].*repmat(etaSpan(j:(j+1)),3,1);
-                for k = 1:obj.nChord
-                    Xs(1,:,idx) = Xle(:,1) + Vc(:,1)*etaChord(k);
-                    Xs(2,:,idx) = Xle(:,1) + Vc(:,1)*etaChord(k+1);
-                    Xs(3,:,idx) = Xle(:,2) + Vc(:,2)*etaChord(k+1);
-                    Xs(4,:,idx) = Xle(:,2) + Vc(:,2)*etaChord(k);
-                    idx = idx + 1;
+            for i = 1:length(obj)
+                xDirGlobal = obj(i).AeroCoordSys.getAglobal()*[1;0;0];
+                xDirLocal = obj(i).CoordSys.getAglobal()'*xDirGlobal;
+                P1 = obj(i).Points(:,1) + obj(i).ChordVecs(:,1)*obj(i).Chords(1).*(obj(i).CrossEta-obj(i).ChordwisePos(1));
+                P2 = obj(i).Points(:,2) + obj(i).ChordVecs(:,2)*obj(i).Chords(2).*(obj(i).CrossEta-obj(i).ChordwisePos(2));
+                X1 = P1 - obj(i).Chords(1)*xDirLocal*obj(i).CrossEta;
+                X4 = P2 - obj(i).Chords(2)*xDirLocal*obj(i).CrossEta;
+                X2 = X1 + obj(i).Chords(1)*xDirLocal;
+                X3 = X4 + obj(i).Chords(2)*xDirLocal;
+                V12 = X2-X1;
+                V43 = X3-X4;
+                V14 = X4-X1;
+                etaChord = obj(i).EtaChord;
+                etaSpan = obj(i).EtaSpan;
+                for j = 1:obj(i).nSpan
+                    Vc = interp1([0 1],[V12,V43]',etaSpan(j:(j+1)))';
+                    Xle = [X1,X1] + [V14,V14].*repmat(etaSpan(j:(j+1)),3,1);
+                    for k = 1:obj(i).nChord
+                        Xs(1,:,idx) = Xle(:,1) + Vc(:,1)*etaChord(k);
+                        Xs(2,:,idx) = Xle(:,1) + Vc(:,1)*etaChord(k+1);
+                        Xs(3,:,idx) = Xle(:,2) + Vc(:,2)*etaChord(k+1);
+                        Xs(4,:,idx) = Xle(:,2) + Vc(:,2)*etaChord(k);
+                        idx = idx + 1;
+                    end
                 end
             end
         end
@@ -224,36 +226,41 @@ classdef AeroSurface < ads.fe.Element
         function IDs = get_panelIDs(obj)
             IDs = (0:1:(obj.nChord*obj.nSpan - 1)) + obj.ID;
         end
+        function angles = get_twists(obj)
+            angles = {};
+            for i = 1:length(obj)
+                xDirGlobal = obj(i).AeroCoordSys.getAglobal()*[1;0;0];
+                xDirLocal = obj(i).CoordSys.getAglobal()'*xDirGlobal;
+                % get local AoA at each end
+                n = cross(-obj(i).ChordVecs(:,1),[0;0;1]);
+                n = n./norm(n);
+                angle_1 = atan2d(cross(xDirLocal,obj(i).ChordVecs(:,1))'*n,xDirLocal'*obj(i).ChordVecs(:,1));
+                angle_2 = atan2d(cross(xDirLocal,obj(i).ChordVecs(:,2))'*n,xDirLocal'*obj(i).ChordVecs(:,2));
+                twistEta = linspace(angle_1,angle_2,obj(i).nSpan*2+1);
+                twistEta = twistEta(2:2:end);
+                angles{i} = reshape(repmat(twistEta,obj(i).nChord,1),[],1)'; 
+
+                P2 = obj(i).Points(:,2) + obj(i).ChordVecs(:,2)*obj(i).Chords(2).*(obj(i).CrossEta-obj(i).ChordwisePos(2));
+                X4 = P2 - obj(i).Chords(2)*xDirLocal*obj(i).CrossEta; 
+                if X4(1) < 0 
+                    angles{i} = -angles{i};
+                end
+            end
+            [~,idx] = sort([obj.ID]);
+            angles = [angles{idx}];
+        end
         function Export(obj,fid)
             if ~isempty(obj)
                 mni.printing.bdf.writeComment(fid,"CAERO1 : Defines Aerodyanmic Panels");
                 mni.printing.bdf.writeColumnDelimiter(fid,"short")
-                angles = {};
+                angles = obj.get_twists();
                 for i = 1:length(obj)
                     xDirGlobal = obj(i).AeroCoordSys.getAglobal()*[1;0;0];
                     xDirLocal = obj(i).CoordSys.getAglobal()'*xDirGlobal;
-                    % get local AoA at each end
-                    n = cross(-obj(i).ChordVecs(:,1),[0;0;1]);
-                    n = n./norm(n);
-                    x_1 = obj(i).ChordVecs(:,1);
-                    angle_1 = atan2d(cross(xDirLocal,obj(i).ChordVecs(:,1))'*n,xDirLocal'*obj(i).ChordVecs(:,1));
-                    angle_2 = atan2d(cross(xDirLocal,obj(i).ChordVecs(:,2))'*n,xDirLocal'*obj(i).ChordVecs(:,2));
-                    twistEta = linspace(angle_1,angle_2,obj(i).nSpan*2+1);
-                    twistEta = twistEta(2:2:end);
-                    angles{i} = reshape(repmat(twistEta,obj(i).nChord,1),[],1)';
-                    % twists = 
-                    % angles{i} = ones(1,obj(i).nChord*obj(i).nSpan)*(90-acosd(xDirLocal'*[0;0;-1]));
                     P1 = obj(i).Points(:,1) + obj(i).ChordVecs(:,1).*obj(i).Chords(1).*(obj(i).CrossEta-obj(i).ChordwisePos(1));
                     P2 = obj(i).Points(:,2) + obj(i).ChordVecs(:,2)*obj(i).Chords(2).*(obj(i).CrossEta-obj(i).ChordwisePos(2));
-                    % P1 = obj(i).CoordSys.getPointGlobal(P1);
-                    % P2 = obj(i).CoordSys.getPointGlobal(P2);
-                    % X1 = P1 - obj(i).Chords(1)*xDirGlobal*obj(i).CrossEta;
-                    % X4 = P2 - obj(i).Chords(2)*xDirGlobal*obj(i).CrossEta;
                     X1 = P1 - obj(i).Chords(1)*xDirLocal*obj(i).CrossEta;
                     X4 = P2 - obj(i).Chords(2)*xDirLocal*obj(i).CrossEta;
-                    if X4(1) < 0 
-                        angles{i} = -angles{i};
-                    end
                     % if non hinge use nChord and nSpan to define the density of panels
                     if isnan(obj(i).HingeEta)
                         mni.printing.cards.CAERO1(obj(i).ID,obj(1).PID,X1,X4,...
@@ -269,7 +276,7 @@ classdef AeroSurface < ads.fe.Element
                 end
                 %print DMI entry
                 [~,idx] = sort([obj.ID]);
-                angles = [angles{idx}];
+                angles;
                 DMI_W2GJ = mni.printing.cards.DMI('W2GJ',deg2rad(angles(:)),2,1,0);
                 DMI_W2GJ.writeToFile(fid);
 
