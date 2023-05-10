@@ -14,14 +14,15 @@ end
 if ~isempty(opts.CAS)
     %% create reference data
     x=-1000:100:100000;
-    [rho_ref,a_ref,~,P,~,~,~] = atmos(x);
-    [~,a_s,T_s,P_s,~,~,~] = atmos(0);
-    CAS = ads.util.calibrated_airspeed(M,P,P_s,a_s,1.4);
-    
+    [rho_ref,a_ref,T_ref,P,~,~,~] = ads.util.atmos(x);
+    [~,a_s,T_s,P_s,~,~,~] = ads.util.atmos(0);
+    CAS_ref = ads.util.calibrated_airspeed(M,P,P_s,a_s,1.4);
+    CAS = opts.CAS;
     %% interpolate data to requested flight conditions
-    rho = interp1(v_cal_ref,rho_ref,v_cal);
-    a = interp1(v_cal_ref,a_ref,v_cal);
-    h = interp1(v_cal_ref,x,v_cal);
+    rho = interp1(CAS_ref,rho_ref,CAS);
+    a = interp1(CAS_ref,a_ref,CAS);
+    h = interp1(CAS_ref,x,CAS);
+    T = interp1(CAS_ref,T_ref,CAS);
     TAS = ads.util.true_airspeed(M,a,T,T_s);
 else
     [rho,a,T,P,~,~,~] = ads.util.atmos(opts.h);
