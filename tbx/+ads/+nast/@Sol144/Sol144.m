@@ -32,6 +32,8 @@ classdef Sol144 < handle
         RefDensity = 1.225;
         LModes = 0;
 
+        OutputAeroMatrices logical = false;
+
         % freqeuency & Structural Damping Info
         FreqRange = [0.01,50];
         NFreq = 500;

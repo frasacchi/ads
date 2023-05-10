@@ -3,10 +3,10 @@ arguments
     obj ads.nast.Sol144
     feModel ads.fe.Component
     opts.Silent = true;
+    opts.TruelySilent = false;
     opts.StopOnFatal = false;
     opts.NumAttempts = 3;
     opts.BinFolder string = '';
-    opts.OutputAeroMatrices logical = false;
     opts.trimObjs = [];
 end
 
@@ -35,7 +35,7 @@ if ~isempty(feModel.Moments)
 end
 %create main BDF file
 bdfFile = fullfile(pwd,binFolder,'Source','sol144.bdf');
-obj.write_main_bdf(bdfFile,[modelFile,trimFile],'OutputAeroMatrices',opts.OutputAeroMatrices);
+obj.write_main_bdf(bdfFile,[modelFile,trimFile]);
 
 %% Run Analysis
 attempt = 1;
@@ -43,19 +43,25 @@ while attempt<opts.NumAttempts+1
     % run NASTRAN
     current_folder = pwd;
     cd(fullfile(binFolder,'Source'))
-    fprintf('Computing sol144 for Model %s: %.0f velocities ...',...
-        obj.Name,length(obj.V));
+    if ~opts.TruelySilent
+        fprintf('Computing sol144 for Model %s: %.0f velocities ...',...
+            obj.Name,length(obj.V));
+    end
     nastran_exe = 'C:\MSC.Software\MSC_Nastran\2022.1\bin\nastran.exe';
     % nastran_exe = 'C:\MSC.Software\MSC_Nastran\20181\bin\nastran.exe';
     command = [nastran_exe,...
         ' ','sol144.bdf',...
         ' ',sprintf('out=..%s%s%s',filesep,'bin',filesep)];
-    if opts.Silent
+    if opts.Silent || opts.TruelySilent
         command = [command,' ','1>NUL 2>NUL'];
     end
-    tic;
-    system(command);
-    toc;
+    if opts.TruelySilent
+        system(command);
+    else     
+        tic;
+        system(command);
+        toc;
+    end
     cd(current_folder);
     %get Results
     f06_filename = fullfile(binFolder,'bin','sol144.f06');

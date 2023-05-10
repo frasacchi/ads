@@ -3,7 +3,6 @@ arguments
     obj
     filename string
     includes (:,1) string
-    opts.OutputAeroMatrices logical = false
     opts.trimObjs = [];
 end
     fid = fopen(filename,"w");
@@ -13,16 +12,16 @@ end
     mni.printing.bdf.writeHeading(fid,'Case Control');
     mni.printing.bdf.writeColumnDelimiter(fid,'8');
     println(fid,'NASTRAN NLINES=999999');
-    if opts.OutputAeroMatrices
+    if obj.OutputAeroMatrices
         println(fid,'ASSIGN output4=''../bin/AJJ.op4'',formatted,UNIT=11');
         println(fid,'ASSIGN output4=''../bin/FFAJ.op4'',formatted,UNIT=12');
     end
     println(fid,'SOL 144');
     println(fid,'TIME 10000');
-    if opts.OutputAeroMatrices
+    if obj.OutputAeroMatrices
         println(fid,'COMPILE PFAERO $');
         % println(fid,'ALTER 275$'); % nastran 2018
-        println(fid,'ALTER 277$'); % nastran 2018
+        println(fid,'ALTER 277$'); % nastran 2021
         % println(fid,'ALTER ''AJJ''$'); % nastran 2022
         println(fid,'OUTPUT4 AJJ,,,,//0/11///8 $');
         println(fid,'COMPILE AESTATRS $');
