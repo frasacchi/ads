@@ -7,7 +7,8 @@ classdef Beam < ads.fe.Element
         ID double = nan;
         PID double = nan;
         G0 ads.fe.Point = ads.fe.Point.empty
-        yDir (3,1) double = [1;0;0];
+        yDir (3,1) double = [0;1;0];
+        K = 1;
         ExportType string {mustBeMember(ExportType,{'CBAR','CBEAM'})} = "CBEAM";
         ExportLongFormat logical = true;
     end
@@ -16,7 +17,7 @@ classdef Beam < ads.fe.Element
         function obj = Beam(stations,opts)
             arguments
                 stations (2,1) ads.fe.BeamStation
-                opts.yDir (3,1) double = [1;0;0];
+                opts.yDir (3,1) double = [0;1;0];
             end
             obj.Stations = stations;
             obj.yDir = opts.yDir;
@@ -90,7 +91,7 @@ classdef Beam < ads.fe.Element
                         matSecs(j) = obj(i).Stations(j).ToMatranSection(Xa,Xb);
                     end
                     %print PBEAM cards
-                    tmpCard = mni.printing.cards.PBEAM(obj(i).PID,obj(i).Stations(1).Mat.ID,matSecs,K=[1,1]);
+                    tmpCard = mni.printing.cards.PBEAM(obj(i).PID,obj(i).Stations(1).Mat.ID,matSecs,K=[1,1]*obj(i).K);
                     tmpCard.LongFormat = obj.ExportLongFormat;
                     tmpCard.writeToFile(fid);
                 end
@@ -141,8 +142,9 @@ classdef Beam < ads.fe.Element
             end
             stations    = ads.fe.BeamStation.FromBaffStation(sts(1),ps(1),Mat);
             stations(2) = ads.fe.BeamStation.FromBaffStation(sts(2),ps(2),Mat);
+            yDir = ps(1).InputCoordSys.A*[0;1;0];
             %make beam
-            obj = ads.fe.Beam(stations);
+            obj = ads.fe.Beam(stations,yDir=yDir);
         end
     end
 end
