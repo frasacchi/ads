@@ -14,13 +14,6 @@ function write_gust(obj,gustFile)
     mni.printing.cards.PARAM('LFREQFL','r',obj.FreqRange(1)).writeToFile(fid);
     mni.printing.cards.PARAM('HFREQFL','r',obj.FreqRange(2)).writeToFile(fid);
     
-    
-%     % Aero Properties Section
-%     mni.printing.bdf.writeComment(fid,'Aerodynamic Properties')
-%     mni.printing.bdf.writeColumnDelimiter(fid,'8');
-%     %create AERO card
-%     mni.printing.cards.AERO(obj.RefChord,obj.RefDensity,ACSID=obj.ACSID).writeToFile(fid);
-    
     %% define Modal damping
     mni.printing.bdf.writeComment(fid,'Modal Damping')
     mni.printing.bdf.writeColumnDelimiter(fid,'8');
@@ -44,17 +37,32 @@ function write_gust(obj,gustFile)
     mni.printing.bdf.writeColumnDelimiter(fid,'8');
 
     if isempty(obj.GustFreq)
-        f = obj.FreqRange(2);
+        Df = obj.FreqRange(2) - obj.FreqRange(1);
     else
-        f = obj.GustFreq;
+        Df = obj.GustFreq - obj.FreqRange(1);
     end
 
-    mni.printing.cards.FREQ1(obj.FREQ_ID,0,f/obj.NFreq,obj.NFreq).writeToFile(fid);
+    mni.printing.cards.FREQ1(obj.FREQ_ID,obj.FreqRange(1),Df/(obj.NFreq-1),(obj.NFreq-1)).writeToFile(fid);
+    mni.printing.cards.FREQ(obj.FREQ_ID,0.001).writeToFile(fid);
     mni.printing.cards.TSTEP(obj.TSTEP_ID,ceil(obj.GustDuration/obj.GustTstep),obj.GustTstep).writeToFile(fid);
+    %DAREA for 1MC
+    mni.printing.bdf.writeComment(fid,'DAREA Card for one-minus-cosine excitation')
+    mni.printing.bdf.writeColumnDelimiter(fid,'8');
     mni.printing.cards.DAREA(obj.DAREA_ID,obj.CoM_GID,3,1).writeToFile(fid);
-    
+    %DAREA for Turbulence
+    mni.printing.bdf.writeComment(fid,'Monitor Point for Random Turbulence')
+    mni.printing.bdf.writeColumnDelimiter(fid,'8');
+    mni.printing.cards.DAREA(obj.DAREA_ID+1,obj.EPoint_ID,0,1).writeToFile(fid);
+    mni.printing.cards.EPOINT(obj.EPoint_ID).writeToFile(fid);
+    mni.printing.cards.DMIG('STIFF',6,1,obj.EPoint_ID,0,obj.EPoint_ID,0,1,nan,TOUT=0).writeToFile(fid);
     %% Gust Case Properties Section
-    obj.Gusts.write_gust_bdf(fid,obj.DAREA_ID,obj.V,alt=obj.Alt);  
+    for i = 1:length(obj.Gusts)
+        if isa(obj.Gusts(i),'ads.nast.gust.OneMC')
+            obj.Gusts(i).write_bdf(fid,obj.DAREA_ID,obj.V,i,alt=obj.Alt,FreqRange=obj.FreqRange);  
+        elseif isa(obj.Gusts(i),'ads.nast.gust.Turb')
+            obj.Gusts(i).write_bdf(fid,obj.DAREA_ID+1,obj.V,i,alt=obj.Alt,FreqRange=obj.FreqRange);  
+        end
+    end
     fclose(fid);
 end
 function println(fid,string)

@@ -10,6 +10,7 @@ classdef IDs
         SID = 1;
         TID = 1;
         ControllerID = 1;
+        ExtremeID = 99999999;
     end
 end
 

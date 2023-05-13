@@ -20,7 +20,7 @@ classdef Sol146 < handle
         LModes = 0;
 
         % freqeuency & Structural Damping Info
-        FreqRange = [0.01,50];
+        FreqRange = [0,50];
         NFreq = 500;
         ModalDampingPercentage = 0;
         GustFreq = [];
@@ -29,7 +29,7 @@ classdef Sol146 < handle
         ForceIDs = [];
 
         % gust data
-        Gusts = ads.nast.GustSettings.empty;
+        Gusts = ads.nast.gust.BaseSettings.empty;
         GustDuration = 5;
         GustTstep = 0.01;
 
@@ -39,6 +39,7 @@ classdef Sol146 < handle
         EigR_ID = 7;
         DAREA_ID = 8;
         SPC_ID = 9;
+        EPoint_ID = nan;
 
         SPCs = [];
         ReducedFreqs = [0.01,0.05,0.1,0.2,0.5,0.75,1,2,4];
@@ -85,13 +86,17 @@ classdef Sol146 < handle
                 obj.EigR_ID = ids.SID + 3;
                 obj.SPC_ID = ids.SID + 4;
                 obj.DAREA_ID = ids.SID + 5;
-                obj.CoM_SPC_ID = ids.SID + 6;
-                ids.SID = ids.SID + 7;
+                obj.CoM_SPC_ID = ids.SID + 7;
+                ids.SID = ids.SID + 8;
                 obj.CoM_GID = ids.GID;
                 ids.GID = ids.GID + 1;
                 obj.CoM_RBE_ID = ids.EID;
                 ids.EID = ids.EID + 1;
-                ids = obj.Gusts.UpdateID(ids);
+                obj.EPoint_ID = ids.ExtremeID;
+                ids.ExtremeID = ids.ExtremeID - 1;
+                for i = 1:length(obj.Gusts)
+                    ids = obj.Gusts(i).UpdateID(ids);
+                end
         end
         function str = config_string(obj)
             str = '';

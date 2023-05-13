@@ -21,7 +21,7 @@ end
     fprintf(fid,'SPC=%.0f\n',obj.SPC_ID);
     println(fid,'RESVEC = YES');
     println(fid,'GROUNDCHECK=YES');
-      
+    println(fid,'K2PP = STIFF');   
     println(fid,sprintf('SDAMP = %.0f',obj.SDAMP_ID));
     println(fid,sprintf('FREQ = %.0f',obj.FREQ_ID));
     println(fid,sprintf('TSTEP = %.0f',obj.TSTEP_ID));
@@ -30,11 +30,11 @@ end
     % println(fid,'VECTOR(SORT1,REAL)=ALL');
     if ~isempty(obj.DispIDs)
         if any(isnan(obj.DispIDs))
-            println(fid,'DISPLACEMENT(SORT1,REAL)= NONE');
+            mni.printing.cases.SET(1,obj.EPoint_ID).writeToFile(fid);
         else
-            mni.printing.cases.SET(1,obj.DispIDs).writeToFile(fid);
-            println(fid,'DISPLACEMENT(SORT1,REAL)= 1');
+            mni.printing.cases.SET(1,[obj.DispIDs,obj.EPoint_ID]).writeToFile(fid);
         end
+        println(fid,'DISPLACEMENT(SORT1,REAL)= 1');
     else
         println(fid,'DISPLACEMENT(SORT1,REAL)= ALL');
     end
@@ -51,7 +51,9 @@ end
     println(fid,'MONITOR = ALL');    
     
     % write gust subcases
-    obj.Gusts.write_gust_subcase(fid);
+    for i = 1:length(obj.Gusts)
+        obj.Gusts(i).write_subcase(fid,i);
+    end
 
     %% Bulk Data
     mni.printing.bdf.writeHeading(fid,'Begin Bulk')
