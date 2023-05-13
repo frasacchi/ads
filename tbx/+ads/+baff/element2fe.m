@@ -28,6 +28,11 @@ for i = 1:length(obj.Children)
         % update location to account for eta
         eta_vec = obj.GetPos(obj.Children(i).Eta);
         fe_comp.CoordSys(j).Origin = fe_comp.CoordSys(j).Origin + eta_vec;
+        % for beam objects update the yDirection
+        for b_i = 1:length(fe_comp.Beams)
+            fe_comp.Beams(b_i).yDir = fe.CoordSys(1).A*fe_comp.Beams(b_i).yDir;
+        end
+
     end
 
     % join
