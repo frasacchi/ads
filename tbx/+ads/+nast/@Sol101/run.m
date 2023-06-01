@@ -6,6 +6,7 @@ arguments
     opts.StopOnFatal = false;
     opts.NumAttempts = 3;
     opts.BinFolder string = '';
+    opts.TruelySilent = false;
 end
 
 %% create BDFs
@@ -38,16 +39,22 @@ while attempt<opts.NumAttempts+1
     % run NASTRAN
     current_folder = pwd;
     cd(fullfile(binFolder,'Source'))
-    fprintf('Computing sol101 for Model %s',obj.Name);
+    if ~opts.TruelySilent
+        fprintf('Computing sol101 for Model %s',obj.Name);
+    end
     command = ['C:\MSC.Software\MSC_Nastran\2022.1\bin\nastran.exe',...
         ' ','sol101.bdf',...
         ' ',sprintf('out=..%s%s%s',filesep,'bin',filesep)];
-    if opts.Silent
+    if opts.Silent || opts.TruelySilent
         command = [command,' ','1>NUL 2>NUL'];
     end
-    tic;
-    system(command);
-    toc;
+    if opts.TruelySilent
+        system(command);
+    else
+        tic;
+        system(command);
+        toc;
+    end
     cd(current_folder);
     %get Results
     f06_filename = fullfile(binFolder,'bin','sol101.f06');
