@@ -73,7 +73,7 @@ classdef Beam < ads.fe.Element
                     Pa = obj(i).Stations(1).Point;
                     Pb = obj(i).Stations(end).Point;
                     if ~isempty(obj(i).G0)
-                        tmpCard = mni.printing.cards.CBEAM(obj(i).ID,obj(i).PID,Pa.ID,Pb.ID,"G0",obj(i).GID);
+                        tmpCard = mni.printing.cards.CBEAM(obj(i).ID,obj(i).PID,Pa.ID,Pb.ID,"G0",obj(i).G0.ID);
                     else
                         tmpCard = mni.printing.cards.CBEAM(obj(i).ID,obj(i).PID,Pa.ID,Pb.ID,"x",obj(i).yDir);
                     end
@@ -142,7 +142,8 @@ classdef Beam < ads.fe.Element
             end
             stations    = ads.fe.BeamStation.FromBaffStation(sts(1),ps(1),Mat);
             stations(2) = ads.fe.BeamStation.FromBaffStation(sts(2),ps(2),Mat);
-            yDir = ps(1).InputCoordSys.A*[0;1;0];
+%             yDir = ps(1).InputCoordSys.getAglobal()*[0;1;0];
+            yDir = [1;0;0];
             %make beam
             obj = ads.fe.Beam(stations,yDir=yDir);
         end
