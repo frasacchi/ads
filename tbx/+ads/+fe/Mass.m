@@ -56,7 +56,7 @@ classdef Mass < ads.fe.Element
                 for i = 1:length(obj)
                     I = obj(i).InertiaTensor;
                     tmpCard = mni.printing.cards.CONM2(obj(i).ID,obj(i).Point.ID,obj(i).mass,...
-                        "I",[I(1,1),I(2,1),I(2,2),I(3,1),I(3,2),I(3,3)]);
+                        "I",[I(1,1),I(2,1),I(2,2),I(3,1),I(3,2),I(3,3)],"CID",obj(i).Point.InputCoordSys.ID);
                     tmpCard.LongFormat = true;
                     tmpCard.writeToFile(fid);
                 end
