@@ -51,8 +51,13 @@ methods
             case 'Length_atmos'
                 obj.Freq = V/obj.Length;
                 alt = min(max(opts.alt,15000),50000);
-                w_ref = interp1([0,15e3,60e3],[17.07,13.41,6.36],alt);
-                obj.Amplitude = w_ref*(0.5*obj.Length/106.17).^(1/6);
+                w_ref_eas = interp1([0,15e3,60e3],[17.07,13.41,6.36],alt);
+                % convert EAS to TAS
+                [rho_0,~,~,~,~,~,~] = ads.util.atmos(0);
+                [rho,~,~,~,~,~,~] = ads.util.atmos(convlength(alt,'ft','m'));
+                w_ref_tas = w_ref_eas.*sqrt(rho_0./rho);
+                % calc amplitude
+                obj.Amplitude = w_ref_tas*(0.5*obj.Length/106.17).^(1/6);
             case 'Freq'
                 obj.Length = V/obj.Freq;
             otherwise
