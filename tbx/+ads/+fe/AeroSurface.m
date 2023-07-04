@@ -21,6 +21,9 @@ classdef AeroSurface < ads.fe.Element
         SplineMeth = 'IPS';
         HingeEta (1,1) double = nan;        % if not nan specifies the eta value of the hinge for a TE control surface
         CrossEta = 0.5;
+        LiftCurveSlope = 2*pi;
+        MomentCurveSlope = 2*pi;
+        IsWall = false; % if true the surface is a wall and will have zero downwash applied to it regardless of angle
     end
 
     properties(Dependent)
@@ -245,15 +248,31 @@ classdef AeroSurface < ads.fe.Element
                 if X4(1) < 0 
                     angles{i} = -angles{i};
                 end
+                if obj(i).IsWall
+                    angles{i} = angles{i}*0;
+                end
             end
             [~,idx] = sort([obj.ID]);
             angles = [angles{idx}];
+        end
+        function [cl_alpha,c_m] = get_correction_factor(obj)
+            cl_alpha = {};
+            c_m = {};
+            for i = 1:length(obj)
+                cl_alpha{i} = ones(1,obj(i).nChord * obj(i).nSpan) * obj(i).LiftCurveSlope;
+                c_m{i} = ones(1,obj(i).nChord * obj(i).nSpan) * obj(i).MomentCurveSlope;
+            end
+            [~,idx] = sort([obj.ID]);
+            cl_alpha = [cl_alpha{idx}]./(2*pi);
+            c_m = [c_m{idx}]./(2*pi);
+
         end
         function Export(obj,fid)
             if ~isempty(obj)
                 mni.printing.bdf.writeComment(fid,"CAERO1 : Defines Aerodyanmic Panels");
                 mni.printing.bdf.writeColumnDelimiter(fid,"short")
                 angles = obj.get_twists();
+                [cl_alpha,c_m] = obj.get_correction_factor();
                 for i = 1:length(obj)
                     xDirGlobal = obj(i).AeroCoordSys.getAglobal()*[1;0;0];
                     xDirLocal = obj(i).CoordSys.getAglobal()'*xDirGlobal;
@@ -276,10 +295,10 @@ classdef AeroSurface < ads.fe.Element
                 end
                 %print DMI entry
                 [~,idx] = sort([obj.ID]);
-                angles;
                 DMI_W2GJ = mni.printing.cards.DMI('W2GJ',deg2rad(angles(:)),2,1,0);
                 DMI_W2GJ.writeToFile(fid);
-
+                DMI_WKK = mni.printing.cards.DMI('WKK',reshape([cl_alpha;c_m],[],1),3,1,0);
+                DMI_WKK.writeToFile(fid);
                 %print aero properties
                 mni.printing.bdf.writeComment(fid,"PAERO1 : Defines Aerodyanmic Properties for panels");
                 mni.printing.bdf.writeColumnDelimiter(fid,"short")
