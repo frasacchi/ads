@@ -40,7 +40,7 @@ while attempt<opts.NumAttempts+1
     current_folder = pwd;
     cd(fullfile(binFolder,'Source'))
     if ~opts.TruelySilent
-        fprintf('Computing sol146 for Model %s: %.0f gusts ...',...
+        fprintf('Computing sol146 for Model %s: %.0f gusts ... ',...
             obj.Name,length(obj.Gusts));
     end
         nastran_exe = 'C:\MSC.Software\MSC_Nastran\2022.1\bin\nastran.exe';

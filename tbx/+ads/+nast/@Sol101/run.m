@@ -40,11 +40,10 @@ while attempt<opts.NumAttempts+1
     current_folder = pwd;
     cd(fullfile(binFolder,'Source'))
     if ~opts.TruelySilent
-        fprintf('Computing sol101 for Model %s',obj.Name);
+        fprintf('Computing sol101 for Model %s ... ',obj.Name);
     end
     command = ['C:\MSC.Software\MSC_Nastran\2022.1\bin\nastran.exe',...
-        ' ','sol101.bdf',...
-        ' ',sprintf('out=..%s%s%s',filesep,'bin',filesep)];
+        ' ','sol101.bdf',' ',sprintf('out=..%s%s%s',filesep,'bin',filesep)];
     if opts.Silent || opts.TruelySilent
         command = [command,' ','1>NUL 2>NUL'];
     end

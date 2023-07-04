@@ -31,7 +31,7 @@ while attempt<opts.NumAttempts+1
     % run NASTRAN
     current_folder = pwd;
     cd(fullfile(binFolder,'Source'))
-    fprintf('Computing sol103 for Model %s',obj.Name);
+    fprintf('Computing sol103 for Model %s ... ',obj.Name);
     command = ['C:\MSC.Software\MSC_Nastran\2022.1\bin\nastran.exe',...
         ' ','sol103.bdf',...
         ' ',sprintf('out=..%s%s%s',filesep,'bin',filesep)];

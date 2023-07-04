@@ -8,8 +8,9 @@ arguments
     opts.NumAttempts = 3;
     opts.BinFolder string = '';
     opts.trimObjs = [];
+    opts.OutputAeroMatrices logical = false;
 end
-
+obj.OutputAeroMatrices = opts.OutputAeroMatrices;
 %% create BDFs
 binFolder = ads.nast.create_tmp_bin('BinFolder',opts.BinFolder);
 % export model
@@ -44,7 +45,7 @@ while attempt<opts.NumAttempts+1
     current_folder = pwd;
     cd(fullfile(binFolder,'Source'))
     if ~opts.TruelySilent
-        fprintf('Computing sol144 for Model %s: %.0f velocities ...',...
+        fprintf('Computing sol144 for Model %s: %.0f velocities ... ',...
             obj.Name,length(obj.V));
     end
     nastran_exe = 'C:\MSC.Software\MSC_Nastran\2022.1\bin\nastran.exe';
