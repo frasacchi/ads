@@ -42,8 +42,7 @@ while attempt<opts.NumAttempts+1
     if ~opts.TruelySilent
         fprintf('Computing sol101 for Model %s ... ',obj.Name);
     end
-    command = ['C:\MSC.Software\MSC_Nastran\2022.1\bin\nastran.exe',...
-        ' ','sol101.bdf',' ',sprintf('out=..%s%s%s',filesep,'bin',filesep)];
+    command = [ads.nast.getExe,' ','sol101.bdf',' ',sprintf('out=..%s%s%s',filesep,'bin',filesep)];
     if opts.Silent || opts.TruelySilent
         command = [command,' ','1>NUL 2>NUL'];
     end
