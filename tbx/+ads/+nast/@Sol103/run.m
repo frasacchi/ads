@@ -32,8 +32,7 @@ while attempt<opts.NumAttempts+1
     current_folder = pwd;
     cd(fullfile(binFolder,'Source'))
     fprintf('Computing sol103 for Model %s ... ',obj.Name);
-    command = ['C:\MSC.Software\MSC_Nastran\2022.1\bin\nastran.exe',...
-        ' ','sol103.bdf',...
+    command = [command = [ads.nast.getExe,' ','sol103.bdf',...
         ' ',sprintf('out=..%s%s%s',filesep,'bin',filesep)];
     if opts.Silent
         command = [command,' ','1>NUL 2>NUL'];
