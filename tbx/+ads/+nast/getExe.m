@@ -1,13 +1,16 @@
-function val = getExe(obj) %get.NastranExe
+function val = getExe(Override) %get.NastranExe
     % getExe Get Nastran Exe path
     %
     % If 'NastranExe' has not been initialized then use 'getpref'.
+    arguments
+        Override logical = false
+    end
     
-    if ispref('ADS_Nastran', 'nastran_exe')
+    if ispref('ADS_Nastran', 'nastran_exe') && ~Override
         val = getpref('ADS_Nastran', 'nastran_exe');
     else
         %Ask the user
-        [name, path] = uigetfile({'*.exe', 'Executable File (*.exe)'}, ...
+        [name, path] = uigetfile({'*.exe', 'Nastran Executable File (nastran.exe)'}, ...
             ['Select the MSC.Nastran executable file ', ...
             '(e.g. \...\nastran.exe)']);
         %Check the output
@@ -18,13 +21,9 @@ function val = getExe(obj) %get.NastranExe
                 'preferences and re-run the analysis.'], ...
                 'Warning - Unable to run analysis', 'modal');
             return
-        end
-        %Check the path for spaces - Enclose with ""
-        folders = strsplit(path, filesep);
-        idx = cellfun(@(x) any(strfind(x, ' ')), folders);
-        folders(idx) = cellfun(@(x) ['"', x, '"'], folders(idx), 'Unif', false);
-        path = strjoin(folders, filesep);
-        val = fullfile(path, name);
+        end       
+        % Enclose with "" incase of spaces
+        val = ['"',fullfile(path,name),'"'];
         %Update the preferences
         setpref('ADS_Nastran', 'nastran_exe', val);
     end
