@@ -1,4 +1,4 @@
-function val = getExe(Override) %get.NastranExe
+function [exe_path,nast_ver] = getExe(Override) %get.NastranExe
     % getExe Get Nastran Exe path
     %
     % If 'NastranExe' has not been initialized then use 'getpref'.
@@ -7,7 +7,8 @@ function val = getExe(Override) %get.NastranExe
     end
     
     if ispref('ADS_Nastran', 'nastran_exe') && ~Override
-        val = getpref('ADS_Nastran', 'nastran_exe');
+        exe_path = getpref('ADS_Nastran', 'nastran_exe');
+        nast_ver = getpref('ADS_Nastran', 'nastran_ver');
     else
         %Ask the user
         [name, path] = uigetfile({'*.exe', 'Nastran Executable File (nastran.exe)'}, ...
@@ -23,8 +24,13 @@ function val = getExe(Override) %get.NastranExe
             return
         end       
         % Enclose with "" incase of spaces
-        val = ['"',fullfile(path,name),'"'];
+        exe_path = ['"',fullfile(path,name),'"'];
         %Update the preferences
-        setpref('ADS_Nastran', 'nastran_exe', val);
+        setpref('ADS_Nastran', 'nastran_exe', exe_path);
+        %get the version
+        [~,out]=system([exe_path,' news']);
+        tok = regexp(out,'Welcome to MSC Nastran (\d*\.\d?)','tokens');
+        nast_ver = tok{1}{1};
+        setpref('ADS_Nastran', 'nastran_ver', nast_ver);        
     end
 end
