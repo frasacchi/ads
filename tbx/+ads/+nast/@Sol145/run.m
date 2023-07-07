@@ -6,6 +6,7 @@ arguments
     opts.StopOnFatal = false;
     opts.NumAttempts = 3;
     opts.BinFolder string = '';
+    opts.UseHdf5 = true;
 end
 
 %% create BDFs
@@ -67,15 +68,19 @@ if attempt > opts.NumAttempts
     fprintf('Failed after %.0f attempts %s... STOPPING\n',opts.NumAttempts,f06_filename)
     error('Failed after %.0f attempts %s...',opts.NumAttempts,f06_filename)
 end
-h5_file = mni.result.hdf5(fullfile(binFolder,'bin','sol145.h5'));
-res = h5_file.read_flutter_summary();
-res_vec = h5_file.read_flutter_eigenvector();
 
-%assign eigen vectors to modes if they equate
-for i = 1:length(res_vec)
-    [~,I] = min(abs([res.CMPLX]-res_vec(i).EigenValue));
-    res(I).IDs = res_vec(i).IDs;
-    res(I).EigenVector = res_vec(i).EigenVector;
-end
+if opts.UseHdf5
+    h5_file = mni.result.hdf5(fullfile(binFolder,'bin','sol145.h5'));
+    res = h5_file.read_flutter_summary();
+    res_vec = h5_file.read_flutter_eigenvector();
+    %assign eigen vectors to modes if they equate
+    for i = 1:length(res_vec)
+        [~,I] = min(abs([res.CMPLX]-res_vec(i).EigenValue));
+        res(I).IDs = res_vec(i).IDs;
+        res(I).EigenVector = res_vec(i).EigenVector;
+    end
+else
+    f06_file = mni.result.f06(fullfile(binFolder,'bin','sol145.f06'));
+    res = f06_file.read_flutter();
 end
 

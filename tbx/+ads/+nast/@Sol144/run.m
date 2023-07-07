@@ -9,6 +9,7 @@ arguments
     opts.BinFolder string = '';
     opts.trimObjs = [];
     opts.OutputAeroMatrices logical = false;
+    opts.UseHdf5 = true;
 end
 obj.OutputAeroMatrices = opts.OutputAeroMatrices;
 %% create BDFs
