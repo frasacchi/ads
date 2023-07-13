@@ -8,6 +8,7 @@ and this project adheres to [Explicit Versioning](https://github.com/exadra37-ve
 ## [Unreleased]
 ### Added
 - [0.1.0.1] added user preference for Nastran exe
+= [0.1.0.2] removed user pref for Nastran Ver as it causes issues on some machines
 ### Changed
 ### Deprecated
 ### Removed
