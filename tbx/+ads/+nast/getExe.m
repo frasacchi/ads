@@ -34,6 +34,6 @@ function [exe_path] = getExe(Override) %get.NastranExe
 %         setpref('ADS_Nastran', 'nastran_ver', nast_ver);        
     end
     if endsWith(exe_path,'w.exe"')
-        warning('The currently selected nastran executable ends in "...w.exe". Calling Nastran with this executable is non-blocking, leading to many of the methods in this toolbox searching for files prior to the completion of the job. Please run "ads.nest.getExe(true)" and select the "nastran.exe" executable if this selection was not intentional')
+        warning('The currently selected nastran executable ends in "...w.exe". Calling Nastran with this executable is non-blocking, leading to many of the methods in this toolbox searching for files prior to the completion of the job. Please run "ads.nast.getExe(true)" and select the "nastran.exe" executable if this selection was not intentional')
     end
 end
