@@ -42,7 +42,9 @@ mni.printing.cards.MDLPRM('HDF5','i',0).writeToFile(fid);
 
 
 %write Boundary Conditions
-obj.write_boundary_conditions(fid);
+mni.printing.bdf.writeComment(fid, 'SPCs')
+mni.printing.cards.SPCADD(obj.SPC_ID,obj.SPCs).writeToFile(fid);
+% obj.write_boundary_conditions(fid);
 %Write Main Load Card
 %write gravity card
 mni.printing.bdf.writeComment(fid,'Gravity Card')
