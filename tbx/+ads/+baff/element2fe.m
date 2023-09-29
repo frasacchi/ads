@@ -7,33 +7,42 @@ fe = ads.baff.ElementFactory(obj,baffOpts);
 AttachmentPoints = fe.Points([fe.Points.isAttachmentPoint]);
 %generate FE for Children
 for i = 1:length(obj.Children)
-    fe_comp = ads.baff.element2fe(obj.Children(i),baffOpts);
-    AnchorPoints = fe_comp.Points([fe_comp.Points.isAnchorPoint]);
-    %update coordinate systems to ref parent
-    for j = 1:length(fe_comp.CoordSys)
-        % update coordinate systems to ref parent
-        if isa(fe_comp.CoordSys(j).InputCoordSys,'ads.fe.BaseCoordSys')
-            fe_comp.CoordSys(j).InputCoordSys = fe.CoordSys(1);
-        end
-        % dont correct local referenced frames
-        isLocal = false;
-        for k = 1:length(fe_comp.CoordSys)
-            if fe_comp.CoordSys(j).InputCoordSys == fe_comp.CoordSys(k)
-                isLocal = true;
-            end
-        end
-        if isLocal
-            continue;
-        end
-        % update location to account for eta
+    if isa(obj.Children(i),'baff.Mass') && isequal(obj.Children(i).A,eye(3)) && isempty(obj.Children(i).Children)
+        tmpOpts = baffOpts;
+        tmpOpts.GenCoordSys = false;
+        fe_comp = ads.baff.element2fe(obj.Children(i),tmpOpts);
+        fe_comp.Points(1).InputCoordSys = fe.CoordSys(1);
         eta_vec = obj.GetPos(obj.Children(i).Eta);
-        fe_comp.CoordSys(j).Origin = fe_comp.CoordSys(j).Origin + eta_vec;
-        % for beam objects update the yDirection
-        for b_i = 1:length(fe_comp.Beams)
-            fe_comp.Beams(b_i).yDir = fe.CoordSys(1).A*fe_comp.Beams(b_i).yDir;
-        end
+        fe_comp.Points(1).X = obj.Children(i).Offset + eta_vec;
+    else
+        fe_comp = ads.baff.element2fe(obj.Children(i),baffOpts);
+        %update coordinate systems to ref parent
+        for j = 1:length(fe_comp.CoordSys)
+            % update coordinate systems to ref parent
+            if isa(fe_comp.CoordSys(j).InputCoordSys,'ads.fe.BaseCoordSys')
+                fe_comp.CoordSys(j).InputCoordSys = fe.CoordSys(1);
+            end
+            % dont correct local referenced frames
+            isLocal = false;
+            for k = 1:length(fe_comp.CoordSys)
+                if fe_comp.CoordSys(j).InputCoordSys == fe_comp.CoordSys(k)
+                    isLocal = true;
+                end
+            end
+            if isLocal
+                continue;
+            end
+            % update location to account for eta
+            eta_vec = obj.GetPos(obj.Children(i).Eta);
+            fe_comp.CoordSys(j).Origin = fe_comp.CoordSys(j).Origin + eta_vec;
+            % for beam objects update the yDirection
+            for b_i = 1:length(fe_comp.Beams)
+                fe_comp.Beams(b_i).yDir = fe.CoordSys(1).A*fe_comp.Beams(b_i).yDir;
+            end
 
+        end
     end
+    AnchorPoints = fe_comp.Points([fe_comp.Points.isAnchorPoint]);
 
     % join
     %find mnimium distance between Parents Attachments points and childs
@@ -42,7 +51,8 @@ for i = 1:length(obj.Children)
         error('No availible points to attach the child (%s) to the parent (%s)',obj.Name,obj.Children(i).Name)
     end
     XsAnchor = [AnchorPoints.GlobalPos];
-    XsAttach = [AttachmentPoints.GlobalPos];
+%     XsAttach = [AttachmentPoints.GlobalPos];
+    XsAttach = AttachmentPoints(1).InputCoordSys.getPointGlobal([AttachmentPoints.X]);
     dist = inf;
     for Attach_i = 1:length(AttachmentPoints)
         tmp_dist = XsAnchor-repmat(XsAttach(:,Attach_i),1,size(XsAnchor,2));
