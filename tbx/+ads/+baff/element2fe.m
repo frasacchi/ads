@@ -56,6 +56,10 @@ for i = 1:length(obj.Children)
     dist = inf;
     for Attach_i = 1:length(AttachmentPoints)
         tmp_dist = XsAnchor-repmat(XsAttach(:,Attach_i),1,size(XsAnchor,2));
+        if baffOpts.ChildAttachmentMethod == ads.baff.ChildAttachmentMethod.ClosestinX
+            Xdir = fe.CoordSys(1).getAglobal()*[100;1;0];
+            tmp_dist = tmp_dist.*repmat(Xdir,1,size(tmp_dist,2));
+        end
         [tmp_dist,Anchor_j] = min(vecnorm(tmp_dist));
         if tmp_dist<dist
             dist = tmp_dist;
