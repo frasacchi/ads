@@ -22,6 +22,21 @@ classdef Beam < ads.fe.Element
             obj.Stations = stations;
             obj.yDir = opts.yDir;
         end
+        function m = GetMass(obj)
+            m = zeros(size(obj));
+            for i = 1:length(obj)
+                tmp_m = 0;
+                for j = 2:length(obj(i).Stations)
+                    h = obj(i).Stations(j).Point.GlobalPos - obj(i).Stations(j-1).Point.GlobalPos;
+                    h = norm(h);
+                    A1 = obj(i).Stations(j-1).A;
+                    A2 = obj(i).Stations(j).A;
+                    V = h*(A1+A2+sqrt(A1*A2))/3;
+                    tmp_m = tmp_m + V*obj(i).Stations(j-1).Mat.rho;
+                end
+                m(i) = tmp_m;
+            end
+        end
         function ids = UpdateID(obj,ids)
             for i = 1:length(obj)
                 obj(i).ID = ids.EID;

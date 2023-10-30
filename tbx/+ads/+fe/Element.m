@@ -12,7 +12,7 @@ classdef Element < matlab.mixin.Heterogeneous & handle
             
         end
         function Export(obj,fid)
-            warning("Exporrt Not Implemented for class %s",class(obj));
+            warning("Export Not Implemented for class %s",class(obj));
         end
         function ToFE(obj)
         end
@@ -20,6 +20,9 @@ classdef Element < matlab.mixin.Heterogeneous & handle
             plt_obj = [];
         end
         function ids = UpdateID(obj,ids)
+        end
+        function m = GetMass(obj)
+            m = zeros(size(obj));
         end
     end
 end

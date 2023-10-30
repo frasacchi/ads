@@ -2,6 +2,7 @@ classdef Constraint < ads.fe.Element
     properties
         Point ads.fe.Point;
         ComponentNumbers double;
+        SupportNumbers double = 0;
         ID double = nan;
     end
     methods
@@ -38,9 +39,16 @@ classdef Constraint < ads.fe.Element
                 mni.printing.bdf.writeComment(fid,"SPC1 : Defines single-point constraints.");
                 mni.printing.bdf.writeColumnDelimiter(fid,"short")
                 for i = 1:length(obj)
-                    tmpCard = mni.printing.cards.SPC1(obj(i).ID,...
-                        obj(i).ComponentNumbers,obj(i).Point.ID);
-                    tmpCard.writeToFile(fid);
+                    if ~isempty(obj(i).ComponentNumbers) & obj(i).ComponentNumbers ~= 0
+                        tmpCard = mni.printing.cards.SPC1(obj(i).ID,...
+                            obj(i).ComponentNumbers,obj(i).Point.ID);
+                        tmpCard.writeToFile(fid);
+                    end
+                    if ~isempty(obj(i).SupportNumbers) & obj(i).SupportNumbers ~= 0
+                        tmpCard = mni.printing.cards.SUPORT(obj(i).Point.ID,...
+                            obj(i).SupportNumbers);
+                        tmpCard.writeToFile(fid);
+                    end
                 end
             end
         end

@@ -30,11 +30,11 @@ classdef Force < ads.fe.Element
                 mni.printing.bdf.writeComment(fid,"FORCE : Defines a Force at a point");
                 mni.printing.bdf.writeColumnDelimiter(fid,"short");
                 for i = 1:length(obj)
-                    nF = norm(obj.F);
+                    nF = norm(obj(i).F);
                     if nF == 0
                         N = [0 0 1];
                     else
-                        N = obj.F/nF;
+                        N = obj(i).F/nF;
                     end
                     mni.printing.cards.FORCE(obj(i).ID,obj(i).Point.ID,nF,N,'CID',obj(i).Point.InputCoordSys.ID).writeToFile(fid);
                 end

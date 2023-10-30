@@ -5,12 +5,18 @@ function fe = point2fe(obj,baffOpts)
     end
 fe = ads.fe.Component();
 fe.Name = obj.Name;
-fe.CoordSys(1) = ads.fe.CoordSys("Origin",obj.Offset,"A",obj.A);
-CS = fe.CoordSys(1);
+if baffOpts.GenCoordSys
+    fe.CoordSys(1) = ads.fe.CoordSys("Origin",obj.Offset,"A",obj.A);
+    CS = fe.CoordSys(1);
+end
 
 % generate nodes
-for i = 1:length(obj)  
-    fe.Points(i) = ads.fe.Point([0;0;0],"InputCoordSys",CS);
+for i = 1:length(obj)
+    if baffOpts.GenCoordSys
+        fe.Points(i) = ads.fe.Point([0;0;0],"InputCoordSys",CS);
+    else
+        fe.Points(i) = ads.fe.Point([0;0;0]);
+    end
 end
 
 % generate Force and moments at each point
