@@ -20,7 +20,7 @@ classdef ControlSurface < ads.fe.Element
         end
         function val = RefArea(obj)
             chords = (1-obj.AeroSurfaces(1).HingeEta).*obj.AeroSurfaces(1).Chords;
-            points = obj.AeroSurfaces(1).Points(2,:);
+            points = obj.AeroSurfaces(1).Points(1,:);
             span = abs(points(2)-points(1));
             val = 0.5*span*sum(chords);
         end

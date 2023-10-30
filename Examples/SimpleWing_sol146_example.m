@@ -1,6 +1,7 @@
 %% Example Exicution of a SOL146 solution in MSC NAstran
 % model is of a cantilever wing suitable for WT testing and utilises the 
 % baff file format to generate a model
+fclose all;
 clear all
 %% Create the FeModel
 
@@ -34,7 +35,7 @@ IDs = fe.UpdateIDs();
 
 % Add Aero Settings
 fe.CoordSys(end+1) = ads.fe.CoordSys(Origin=[0;0;0],A=eye(3));
-fe.AeroSettings(1) = ads.fe.AeroSettings(0.12,1,2,ACSID=fe.CoordSys(end),SymXZ=true);
+fe.AeroSettings(1) = ads.fe.AeroSettings(0.12,1,2,2*0.12,ACSID=fe.CoordSys(end),SymXZ=true);
 for i = 1:length(fe.AeroSurfaces)
     fe.AeroSurfaces(i).AeroCoordSys = fe.CoordSys(end);
 end
@@ -59,7 +60,7 @@ sol.GustFreq = [];
 Amp = -0.5;
 Freqs = [3,6,9];
 for i = 1:length(Freqs)
-    sol.Gusts(i) = ads.nast.GustSettings(Amp,nan,Freqs(i),'Freq');
+    sol.Gusts(i) = ads.nast.gust.OneMC(Amp,nan,Freqs(i),'Freq');
     sol.Gusts(i).Tdelay = 1;
 end
 % update the IDs

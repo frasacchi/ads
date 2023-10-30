@@ -1,6 +1,7 @@
 %% Example Exicution of a SOL145 solution in MSC NAstran
 % model is of a cantilever wing suitable for WT testing and utilises the 
 % baff file format to generate a model
+fclose all;
 clear all
 %% Create the FeModel
 
@@ -21,7 +22,7 @@ ax.ZAxis.Direction = "reverse";
 axis equal
 
 %% Setup 103 Analysis with Nastran
-Us = 0.2:0.2:50;  % velocity in m/s
+Us = 0.2:0.2:100;  % velocity in m/s
 
 %flatten the FE model and update the element ID numbers
 fe = fe.Flatten;
@@ -29,7 +30,7 @@ IDs = fe.UpdateIDs();
 
 % Add Aero Settings
 fe.CoordSys(end+1) = ads.fe.CoordSys(Origin=[0;0;0],A=eye(3));
-fe.AeroSettings(1) = ads.fe.AeroSettings(0.12,1,2,ACSID=fe.CoordSys(end),SymXZ=true);
+fe.AeroSettings(1) = ads.fe.AeroSettings(0.12,1,2,2*0.12,ACSID=fe.CoordSys(end),SymXZ=true);
 for i = 1:length(fe.AeroSurfaces)
     fe.AeroSurfaces(i).AeroCoordSys = fe.CoordSys(end);
 end
