@@ -6,7 +6,7 @@ function fe = mass2fe(obj,baffOpts)
 fe = point2fe(obj,baffOpts);
 for i = 1:length(obj)
     % generate mass
-    fe.Masses(i) = ads.fe.Mass(obj(i).mass,fe.Points(i));
+    fe.Masses(i) = ads.fe.Mass(obj(i).GetElementMass,fe.Points(i));
     fe.Masses(i).InertiaTensor = obj(i).InertiaTensor;
 end
 end

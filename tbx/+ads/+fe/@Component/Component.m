@@ -17,6 +17,14 @@ classdef Component < handle
         AeroSettings (:,1) ads.fe.AeroSettings = ads.fe.AeroSettings.empty;
     end
     methods
+        function m = GetMass(obj)
+            m = zeros(size(obj));
+            for i = 1:length(obj)
+                m(i) = sum(obj(i).Beams.GetMass);
+                m(i) = m(i) + sum(obj(i).Masses.GetMass);
+                m(i) = m(i) + sum(obj(i).Components.GetMass); 
+            end
+        end
         function obj1 = plus(obj1,obj2)
             if ~isa(obj2,"ads.fe.Component")
                 error("Can't add data types of %s and %s",class(obj1),class(obj2))

@@ -29,6 +29,12 @@ classdef Mass < ads.fe.Element
                 opts.Ixy,opts.Iyy,opts.Iyz;...
                 opts.Ixz,opts.Iyz,opts.Izz];
         end
+        function m = GetMass(obj)
+            m = size(obj)
+            for i = 1:length(obj)
+                m(i) = obj(i).mass;
+            end
+        end
         function ids = UpdateID(obj,ids)
             for i = 1:length(obj)
                 obj(i).ID = ids.EID;
