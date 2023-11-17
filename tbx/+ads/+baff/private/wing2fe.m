@@ -67,6 +67,10 @@ if baffOpts.GenerateAeroPanels
                 fe.ControlSurfaces(i).AeroSurfaces(idx) = fe.AeroSurfaces(j);
             end
         end
+        if ~isempty(obj.ControlSurfaces(i).LinkedSurface)
+            fe.ControlSurfaces(i).LinkedSurface = obj.ControlSurfaces(i).LinkedSurface.Name;
+            fe.ControlSurfaces(i).LinkedCoefficent = obj.ControlSurfaces(i).LinkedCoefficent;
+        end
     end
 end
 end

@@ -8,8 +8,9 @@ classdef ControlSurface < ads.fe.Element
         CID (1,1) double = nan;
         ControllerID (1,1) double = nan;
         DeflectionLimit (2,1) double = [-pi/2,pi/2];
+        Deflection double = nan; % nan sets the surface to free, any other value will lock it
 
-        LinkedSurface ads.fe.ControlSurface = ads.fe.ControlSurface.empty;
+        LinkedSurface string = ""; % name of linked surface
         LinkedCoefficent = 1;
     end
     
@@ -82,18 +83,14 @@ classdef ControlSurface < ads.fe.Element
             clear cards
             idx = 1;
             for i = 1:length(obj)
-                if ~isempty(obj(i).LinkedSurface)
-                cards(idx) = mni.printing.cards.AELINK(obj(i).Name,...
-                    {{obj(i).LinkedSurface.Name,obj(i).LinkedCoefficent}});
-                    
-                idx = idx+1;
-                end
-            end
-            if idx>1
-                mni.printing.bdf.writeComment(fid,"AELINK : Defines link between control surfaces");
-                mni.printing.bdf.writeColumnDelimiter(fid,"short")
-                for i = 1:length(cards)
-                    cards(i).writeToFile(fid);
+                if obj(i).LinkedSurface ~= ""
+                    if idx == 1
+                        mni.printing.bdf.writeComment(fid,"AELINK : Defines link between control surfaces");
+                        mni.printing.bdf.writeColumnDelimiter(fid,"short")
+                    end
+                    idx = idx + 1;
+                    mni.printing.cards.AELINK(obj(i).Name,...
+                        {{obj(i).LinkedSurface,obj(i).LinkedCoefficent}}).writeToFile(fid);
                 end
             end
         end
