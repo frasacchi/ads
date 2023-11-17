@@ -18,6 +18,7 @@ if baffOpts.SplitBeamsAtChildren
     etas = unique([etas,child_eta]);
     etas = etas(etas>=0 & etas<=1);
 end
+etas = round(etas,15);
 % ensure only make beam elements between eta 0 and 1 (children can have greater etas!)
 if etas(1)~=0 || etas(end)~=1
     error('eta must start and end at 0 and 1')
