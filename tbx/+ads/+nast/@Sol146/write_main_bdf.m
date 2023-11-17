@@ -63,8 +63,6 @@ end
     for i = 1:length(includes)
         mni.printing.cards.INCLUDE(includes(i)).writeToFile(fid);
     end
-    %write Boundary Conditions
-    obj.write_boundary_conditions(fid);
     % genric options 
     mni.printing.cards.PARAM('POST','i',0).writeToFile(fid);
     mni.printing.cards.PARAM('AUTOSPC','s','YES').writeToFile(fid);
@@ -74,6 +72,10 @@ end
     mni.printing.cards.PARAM('AUNITS','r',0.1019716).writeToFile(fid);
     mni.printing.cards.PARAM('GUSTAERO','i',-1).writeToFile(fid);
     mni.printing.cards.MDLPRM('HDF5','i',0).writeToFile(fid);
+
+    %write Boundary Conditions
+    mni.printing.bdf.writeComment(fid, 'SPCs')
+    mni.printing.cards.SPCADD(obj.SPC_ID,obj.SPCs).writeToFile(fid);
        
     %create eigen solver and frequency bounds
     mni.printing.bdf.writeComment(fid,'Eigen Decomposition Method')

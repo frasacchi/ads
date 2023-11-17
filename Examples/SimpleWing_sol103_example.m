@@ -3,7 +3,8 @@
 % baff file format to generate a model
 
 %% Create the FeModel
-
+fclose all;
+clear all
 % get baff model from private function
 model = UniformBaffWing();
 
@@ -40,7 +41,7 @@ sol.run(fe,Silent=false,NumAttempts=1,BinFolder=BinFolder);
 filename = fullfile(BinFolder,'bin','sol103.h5');
 resFile = mni.result.hdf5(filename);
 res = resFile.read_modeshapes;
-
+N=1;
 f = figure(2);
 clf;
 nas_model = mni.import_matran(fullfile(char(BinFolder),'Source','sol103.bdf'),'LogFcn',@(a,b,c)fprintf(''));
@@ -57,7 +58,7 @@ axis equal
 
 %% animate the Modeshape
 %mode number to plot
-N = 1;
+N = 5;
 [~,i] = ismember(nas_model.GRID.GID,res(N).IDs);
 nas_model.GRID.Deformation = [res(N).EigenVector(i,1:3)]';
 

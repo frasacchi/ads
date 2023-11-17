@@ -3,12 +3,13 @@
 % baff file format to generate a model
 
 %% Create the FeModel
-
+fclose all;
+clear all
 % get baff model from private function
 model = UniformBaffWing();
 
 % apply a point force the the wingtip
-force = baff.Point(eta=1,Name="TipLoad",Force=[0;0;-30]);
+force = baff.Point(eta=1,Name="TipLoad",Force=[0;0;30]);
 model.Wing(1).add(force);
 model = model.Rebuild;
 

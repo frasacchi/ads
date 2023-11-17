@@ -50,7 +50,8 @@ end
         mni.printing.cards.INCLUDE(includes(i)).writeToFile(fid);
     end
     %write Boundary Conditions
-    obj.write_boundary_conditions(fid);
+    mni.printing.bdf.writeComment(fid, 'SPCs')
+    mni.printing.cards.SPCADD(obj.SPC_ID,obj.SPCs).writeToFile(fid);
     % write GRAV + loads
     mni.printing.bdf.writeComment(fid,'Gravity Card')
     mni.printing.bdf.writeColumnDelimiter(fid,'8');

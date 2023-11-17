@@ -11,8 +11,10 @@ classdef TrimParameter
     
     methods
         function obj = TrimParameter(Name,Value,Type)
-            if ~validatestring(Type,{'Rigid Body','Control Surface'})
-                error('Parameter type must be either "Rigid Body" or "Control Surface" not, "%s"',Type)
+            arguments
+                Name string
+                Value double
+                Type string {mustBeMember(Type,["Rigid Body","Control Surface"])}
             end
             obj.Name = Name;
             obj.Value = Value;

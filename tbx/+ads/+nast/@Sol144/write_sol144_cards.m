@@ -45,7 +45,7 @@ end
             if ~isempty(trim_obj.Link)
                 mni.printing.cards.AELINK(trim_obj.Name,{trim_obj.Link}).writeToFile(fid);
             elseif ~isnan(trim_obj.Value)
-                labels = [labels,{trim_obj.Name},{trim_obj.Value}];
+                labels = [labels,{char(trim_obj.Name)},{trim_obj.Value}];
             end
         end    
     end
@@ -54,7 +54,7 @@ end
         if ~isempty(trim_obj.Link)
             mni.printing.cards.AELINK(trim_obj.Name,{trim_obj.Link}).writeToFile(fid);
         elseif ~isnan(trim_obj.Value)
-            labels = [labels,{trim_obj.Name},{trim_obj.Value}];
+            labels = [labels,{char(trim_obj.Name)},{trim_obj.Value}];
         end
     end
 

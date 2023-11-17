@@ -21,3 +21,4 @@ and this project adheres to [Explicit Versioning](https://github.com/exadra37-ve
 ### Deprecated
 ### Removed
 ### Fixed
+- [0.1.0.6] get simple wing example to work again

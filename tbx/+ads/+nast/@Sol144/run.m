@@ -7,16 +7,35 @@ arguments
     opts.StopOnFatal = false;
     opts.NumAttempts = 3;
     opts.BinFolder string = '';
-    opts.trimObjs = [];
+    opts.trimObjs = ads.nast.TrimParameter.empty;
     opts.OutputAeroMatrices logical = false;
     opts.UseHdf5 = true;
 end
 obj.OutputAeroMatrices = opts.OutputAeroMatrices;
 %% create BDFs
 binFolder = ads.nast.create_tmp_bin('BinFolder',opts.BinFolder);
+
+%update boundary condition
+if ~isempty(obj.CoM) 
+    if obj.isFree
+        obj.CoM.ComponentNumbers = ads.nast.inv_dof(obj.DoFs);
+        obj.CoM.SupportNumbers = obj.DoFs;
+    else
+        obj.CoM.ComponentNumbers = 123456;
+        obj.CoM.SupportNumbers = [];
+    end
+end
+
 % export model
 modelFile = string(fullfile(pwd,binFolder,'Source','Model','model.bdf'));
 feModel.Export(modelFile);
+
+% add control surfaces to tirm parameters
+for i = 1:length(feModel.ControlSurfaces)
+    cs = feModel.ControlSurfaces(i);
+    opts.trimObjs(end+1) = ads.nast.TrimParameter(cs.Name,cs.Deflection,"Control Surface");
+end
+
 % create flutter cards
 trimFile = string(fullfile(pwd,binFolder,'Source','trim.bdf'));
 obj.write_sol144_cards(trimFile,opts.trimObjs);

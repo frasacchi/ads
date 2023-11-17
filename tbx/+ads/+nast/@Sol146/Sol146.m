@@ -46,11 +46,8 @@ classdef Sol146 < handle
 
         % CoM Info for Boundary Constraints
         isFree = false; % if is Free a Boundary condition will be applied to  the Centre of Mass
-        CoM = ads.fe.Point.empty;
+        CoM = ads.fe.Constraint.empty;
         DoFs = [];
-        CoM_SPC_ID = nan;
-        CoM_GID = nan;
-        CoM_RBE_ID = nan; 
     end
     
     methods
@@ -86,12 +83,8 @@ classdef Sol146 < handle
                 obj.EigR_ID = ids.SID + 3;
                 obj.SPC_ID = ids.SID + 4;
                 obj.DAREA_ID = ids.SID + 5;
-                obj.CoM_SPC_ID = ids.SID + 7;
-                ids.SID = ids.SID + 8;
-                obj.CoM_GID = ids.GID;
-                ids.GID = ids.GID + 1;
-                obj.CoM_RBE_ID = ids.EID;
-                ids.EID = ids.EID + 1;
+                ids.SID = ids.SID + 7; % skip one for DAREA fun...
+
                 obj.EPoint_ID = ids.ExtremeID;
                 ids.ExtremeID = ids.ExtremeID - 1;
                 for i = 1:length(obj.Gusts)
