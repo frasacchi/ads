@@ -1,13 +1,16 @@
-function model = UniformBaffWing()
+function model = UniformBaffWing(opts)
+arguments
+    opts.BarChordwisePos = 0.5;
+    opts.IncludeTipMass = true;
+end
 BarThickness = 4e-3;
 BarWidth = 40e-3;
-WingChord = 0.12;
-BarChordwisePos = 0.5;
-L = 0.8;
+WingChord = 0.25;
+L = 1;
 
 % Make Aero Bar
 mainBeam = baff.Wing.UniformWing(L,BarThickness,BarWidth...
-    ,baff.Material.Stainless400,WingChord,BarChordwisePos,"NAeroStations",10);
+    ,baff.Material.Stainless400,WingChord,opts.BarChordwisePos,"NAeroStations",10);
 mainBeam.Name = 'Wing 1';
 twists = linspace(0,10,10);
 for i = 1:10
@@ -19,7 +22,7 @@ end
 
 
 % Add Some poiont masses to the wing
-xs = [-21,-21,-21,-21,-21,-17]*1e-3 + (BarChordwisePos-0.25)*WingChord;
+xs = [-21,-21,-21,-21,-21,-17]*1e-3 + (opts.BarChordwisePos-0.25)*WingChord;
 ys = [100,240,380,520,660,767]*1e-3;
 mass = [ones(1,5)*0.075,0.056];
 inertias = [ones(1,5)*82,26;ones(1,5)*73,32;ones(1,5)*151,56]*1e-6;
@@ -34,12 +37,14 @@ for i = 1:length(xs)
 end
 
 % add a tip mass to get a flutter mechanism
+if opts.IncludeTipMass
 tip_mass = baff.Mass(0.05);
 tip_mass.Eta = 1;
-tip_mass.Offset(2) = 0.05;
+tip_mass.Offset(2) = -(1-opts.BarChordwisePos)*WingChord;
 tip_mass.Name = 'tip_mass';
 tip_mass.InertiaTensor(1) = 2e-3;
 mainBeam.add(tip_mass);
+end
 
 
 % Add Root Constraint

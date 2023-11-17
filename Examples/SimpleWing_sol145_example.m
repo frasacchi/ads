@@ -6,7 +6,7 @@ clear all
 %% Create the FeModel
 
 % get baff model from private function
-model = UniformBaffWing();
+model = UniformBaffWing(BarChordwisePos=0.5,IncludeTipMass=true);
 
 %convert to an FE Model
 fe = ads.baff.baff2fe(model);
@@ -63,5 +63,6 @@ nexttile(2);
 ads.nast.plot.flutter(res,NModes=4,XAxis='V',YAxis='D');
 xlabel('Velocity [m/s]')
 ylabel('Damping Ratio')
+ylim([-1 1])
 
 

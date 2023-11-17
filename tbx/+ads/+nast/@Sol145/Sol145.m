@@ -38,27 +38,19 @@ classdef Sol145 < handle
 
         % CoM Info for Boundary Constraints
         isFree = false; % if is Free a Boundary condition will be applied to  the Centre of Mass
-        CoM = ads.fe.Point.empty;
-        DoFs = [];
-        CoM_SPC_ID = 10;
-        CoM_GID = 1;
-        CoM_RBE_ID = 1; 
+        CoM = ads.fe.Constraint.empty;
+        DoFs = []; 
     end
     
     methods
         function ids = UpdateID(obj,ids)
                 obj.FlutterID = ids.SID;
-                obj.Flfact_mach_id = ids.SID+1;
-                obj.Flfact_v_id = ids.SID+2;
-                obj.Flfact_rho_id = ids.SID+3;
+                obj.Flfact_mach_id = ids.SID + 1;
+                obj.Flfact_v_id = ids.SID + 2;
+                obj.Flfact_rho_id = ids.SID + 3;
                 obj.EigR_ID = ids.SID + 4;
                 obj.SPC_ID = ids.SID + 5;
-                obj.CoM_SPC_ID = ids.SID + 6;
-                ids.SID = ids.SID + 7;
-                obj.CoM_GID = ids.GID;
-                ids.GID = ids.GID + 1;
-                obj.CoM_RBE_ID = ids.EID;
-                ids.EID = ids.EID + 1;
+                ids.SID = ids.SID + 6;
         end
         function str = config_string(obj)
             str = '';
