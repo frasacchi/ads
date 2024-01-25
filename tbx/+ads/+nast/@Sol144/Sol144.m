@@ -64,6 +64,7 @@ classdef Sol144 < handle
                 obj.SPC_ID = ids.SID + 2;
                 obj.Grav_ID = ids.SID + 3;
                 obj.Load_ID = ids.SID + 4;
+                ids.SID = ids.SID + 5;
         end
         function str = config_string(obj)
             str = '';

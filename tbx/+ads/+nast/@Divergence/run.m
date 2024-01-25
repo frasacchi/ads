@@ -1,15 +1,15 @@
-function [res,binFolder] = run(obj,feModel,opts)
+function [binFolder] = run(obj,feModel,opts)
 arguments
-    obj
+    obj ads.nast.Divergence
     feModel ads.fe.Component
     opts.Silent = true;
     opts.TruelySilent = false;
     opts.StopOnFatal = false;
     opts.NumAttempts = 3;
     opts.BinFolder string = '';
+    opts.trimObjs = ads.nast.TrimParameter.empty;
     opts.UseHdf5 = true;
 end
-
 %% create BDFs
 binFolder = ads.nast.create_tmp_bin('BinFolder',opts.BinFolder);
 
@@ -27,9 +27,6 @@ end
 % export model
 modelFile = string(fullfile(pwd,binFolder,'Source','Model','model.bdf'));
 feModel.Export(modelFile);
-% create flutter cards
-flutFile = string(fullfile(pwd,binFolder,'Source','flutter.bdf'));
-obj.write_flutter(flutFile);
 
 % extract SPC IDs
 if ~isempty(feModel.Constraints)
@@ -37,9 +34,17 @@ if ~isempty(feModel.Constraints)
 else
     obj.SPCs = [];
 end
+%extract Forces
+obj.ForceIDs = [];
+if ~isempty(feModel.Forces)
+    obj.ForceIDs = [obj.ForceIDs,[feModel.Forces.ID]'];
+end
+if ~isempty(feModel.Moments)
+    obj.ForceIDs = [obj.ForceIDs,[feModel.Moments.ID]'];
+end
 %create main BDF file
-bdfFile = fullfile(pwd,binFolder,'Source','sol145.bdf');
-obj.write_main_bdf(bdfFile,[modelFile,flutFile]);
+bdfFile = fullfile(pwd,binFolder,'Source','sol144_div.bdf');
+obj.write_main_bdf(bdfFile,[modelFile]);
 
 %% Run Analysis
 attempt = 1;
@@ -48,10 +53,10 @@ while attempt<opts.NumAttempts+1
     current_folder = pwd;
     cd(fullfile(binFolder,'Source'))
     if ~opts.TruelySilent
-        fprintf('Computing sol145 for Model %s: %.0f velocities ... ',...
-        obj.Name,length(obj.V));
+        fprintf('Computing sol144 diveregence for Model %s at %.0f mach Numbers ... ',...
+            obj.Name,length(obj.Mach));
     end
-    command = [ads.nast.getExe,' ','sol145.bdf',...
+    command = [ads.nast.getExe,' ','sol144_div.bdf',...
         ' ',sprintf('out=..%s%s%s',filesep,'bin',filesep)];
     if opts.Silent || opts.TruelySilent
         command = [command,' ','1>NUL 2>NUL'];
@@ -65,7 +70,7 @@ while attempt<opts.NumAttempts+1
     end
     cd(current_folder);
     %get Results
-    f06_filename = fullfile(binFolder,'bin','sol145.f06');
+    f06_filename = fullfile(binFolder,'bin','sol144_div.f06');
     f06_file = mni.result.f06(f06_filename);
     if f06_file.isEmpty
         attempt = attempt + 1;
@@ -87,19 +92,8 @@ if attempt > opts.NumAttempts
     fprintf('Failed after %.0f attempts %s... STOPPING\n',opts.NumAttempts,f06_filename)
     error('Failed after %.0f attempts %s...',opts.NumAttempts,f06_filename)
 end
-
-if opts.UseHdf5
-    h5_file = mni.result.hdf5(fullfile(binFolder,'bin','sol145.h5'));
-    res = h5_file.read_flutter_summary();
-    res_vec = h5_file.read_flutter_eigenvector();
-    %assign eigen vectors to modes if they equate
-    for i = 1:length(res_vec)
-        [~,I] = min(abs([res.CMPLX]-res_vec(i).EigenValue));
-        res(I).IDs = res_vec(i).IDs;
-        res(I).EigenVector = res_vec(i).EigenVector;
-    end
-else
-    f06_file = mni.result.f06(fullfile(binFolder,'bin','sol145.f06'));
-    res = f06_file.read_flutter();
+% data = f06_file.read_disp;
+% p_data = f06_file.read_aeroP;
+% f_data = f06_file.read_aeroF;
 end
 

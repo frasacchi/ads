@@ -37,6 +37,7 @@ end
     fprintf(fid,'SPC=%.0f\n',obj.SPC_ID);
     fprintf(fid,'LOAD=%.0f\n',obj.Load_ID);
     println(fid,'MONITOR = ALL');
+    println(fid,'SPCFORCES = ALL');
     println(fid,'FORCE(SORT1,REAL) = ALL');
     println(fid,'DISPLACEMENT(SORT1,REAL)=ALL');
     println(fid,'GROUNDCHECK=YES');
