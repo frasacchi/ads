@@ -1,6 +1,11 @@
 function model = sol144(bin_folder)
+arguments
+    bin_folder char
+end
     model = mni.import_matran(fullfile(bin_folder,'Source','sol144.bdf'));
     model.draw;
+    % hdf = mni.result.hdf5(fullfile(bin_folder,'bin','sol144.h5'));
+
     f06 =  mni.result.f06(fullfile(bin_folder,'bin','sol144.f06'));
     res_disp =  f06.read_disp;
     res_aeroP = f06.read_aeroP;

@@ -1,11 +1,16 @@
-function model = sol103(bin_folder,modeshape_num,varargin)
-
-    p = inputParser();
-    p.addParameter('Animate',true,@(x)islogical(x));
-    p.parse(varargin{:});
-    
+function [model,res_modeshape,res_freq] = sol103(bin_folder,modeshape_num,opts)
+arguments
+    bin_folder
+    modeshape_num
+    opts.Animate logical = false;
+    opts.model = [];
+end
     close all
-    model = mni.import_matran(fullfile(bin_folder,'Source','sol103.bdf'));
+    if isempty(opts.model)
+        model = mni.import_matran(fullfile(bin_folder,'Source','sol103.bdf'));
+    else
+        model = opts.model;
+    end
     model.draw;
 
     % get modal data
@@ -18,7 +23,7 @@ function model = sol103(bin_folder,modeshape_num,varargin)
         res_modeshape.T2(modeshape_num,i);res_modeshape.T3(modeshape_num,i)];
 
     model.update()
-    if p.Results.Animate
+    if opts.Animate
         model.animate('Period',0.5,'Cycles',5,'Scale',0.2) 
     end
 end
