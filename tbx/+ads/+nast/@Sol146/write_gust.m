@@ -48,7 +48,7 @@ function write_gust(obj,gustFile)
     %DAREA for 1MC
     mni.printing.bdf.writeComment(fid,'DAREA Card for one-minus-cosine excitation')
     mni.printing.bdf.writeColumnDelimiter(fid,'8');
-    mni.printing.cards.DAREA(obj.DAREA_ID,obj.CoM_GID,3,1).writeToFile(fid);
+    mni.printing.cards.DAREA(obj.DAREA_ID,obj.CoM.Point.ID,3,1).writeToFile(fid);
     %DAREA for Turbulence
     mni.printing.bdf.writeComment(fid,'Monitor Point for Random Turbulence')
     mni.printing.bdf.writeColumnDelimiter(fid,'8');
