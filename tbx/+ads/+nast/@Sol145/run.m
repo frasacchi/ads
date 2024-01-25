@@ -3,6 +3,7 @@ arguments
     obj
     feModel ads.fe.Component
     opts.Silent = true;
+    opts.TruelySilent = false;
     opts.StopOnFatal = false;
     opts.NumAttempts = 3;
     opts.BinFolder string = '';
@@ -46,16 +47,22 @@ while attempt<opts.NumAttempts+1
     % run NASTRAN
     current_folder = pwd;
     cd(fullfile(binFolder,'Source'))
-    fprintf('Computing sol145 for Model %s: %.0f velocities ... ',...
+    if ~opts.TruelySilent
+        fprintf('Computing sol145 for Model %s: %.0f velocities ... ',...
         obj.Name,length(obj.V));
+    end
     command = [ads.nast.getExe,' ','sol145.bdf',...
         ' ',sprintf('out=..%s%s%s',filesep,'bin',filesep)];
-    if opts.Silent
+    if opts.Silent || opts.TruelySilent
         command = [command,' ','1>NUL 2>NUL'];
     end
-    tic;
-    system(command);
-    toc;
+    if opts.TruelySilent
+        system(command);
+    else     
+        tic;
+        system(command);
+        toc;
+    end
     cd(current_folder);
     %get Results
     f06_filename = fullfile(binFolder,'bin','sol145.f06');

@@ -17,6 +17,7 @@ end
     mni.printing.bdf.writeHeading(fid,'Case Control')
     println(fid,'ECHO=NONE');
     println(fid,'VECTOR(SORT1,REAL)=ALL');
+    println(fid,sprintf('SDAMP = %.0f',obj.SDAMP_ID));
     println(fid,sprintf('FMETHOD = %.0f',obj.FlutterID));
     println(fid,sprintf('METHOD = %.0f',obj.EigR_ID));
     fprintf(fid,'SPC=%.0f\n',obj.SPC_ID);
