@@ -23,3 +23,4 @@ and this project adheres to [Explicit Versioning](https://github.com/exadra37-ve
 ### Removed
 ### Fixed
 - [0.1.0.6] get simple wing example to work again
+- [0.1.0.10] get Freq based gusts working again

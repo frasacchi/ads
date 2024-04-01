@@ -59,7 +59,7 @@ methods
                 % calc amplitude
                 obj.Amplitude = w_ref_tas*(0.5*obj.Length/106.17).^(1/6);
             case 'Freq'
-                obj.Length = V/obj.Freq;
+                obj.Length = V./obj.Freq;
             otherwise
                 error('Incorrect Gust Type')
         end

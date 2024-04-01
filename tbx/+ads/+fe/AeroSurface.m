@@ -127,7 +127,7 @@ classdef AeroSurface < ads.fe.Element
                     span = vecnorm(obj(i).Points(:,2)-obj(i).Points(:,1));
                     panelSpan = span/N;
                     panelChord = panelSpan/AspectRatio;
-                    obj(i).nChord = ceil(obj(i).Chord(2)/panelChord);
+                    obj(i).nChord = ceil(obj(i).Chords(2)/panelChord);
             end
             end
         end

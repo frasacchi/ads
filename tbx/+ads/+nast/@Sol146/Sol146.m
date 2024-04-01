@@ -70,7 +70,7 @@ classdef Sol146 < handle
             obj.V = V;
             obj.rho = rho;
             obj.Mach = Mach;
-            obj.ANGLEA.Value = 0;
+%             obj.ANGLEA.Value = 0;
             obj.DoFs = [];
         end
         function obj = Sol146(CoM)
