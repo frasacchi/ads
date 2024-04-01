@@ -62,7 +62,7 @@ while attempt<opts.NumAttempts+1
         continue
     elseif f06_file.isfatal
         if opts.StopOnFatal
-            error('Fatal error detected in f06 file %s...',f06_filename)
+            error('ADS:Nastran','Fatal error detected in f06 file %s...',f06_filename)
         else
             attempt = attempt + 1;
             fprintf('Fatal error detected on attempt %.0f in f06 file %s... \n',attempt,f06_filename)
@@ -74,7 +74,7 @@ while attempt<opts.NumAttempts+1
 end
 if attempt > opts.NumAttempts
     fprintf('Failed after %.0f attempts %s... STOPPING\n',opts.NumAttempts,f06_filename)
-    error('Failed after %.0f attempts %s...',opts.NumAttempts,f06_filename)
+    error('ADS:Nastran','Failed after %.0f attempts %s...',opts.NumAttempts,f06_filename)
 end
 h5_file = mni.result.hdf5(fullfile(binFolder,'bin','sol103.h5'));
 if opts.IncludeEigenVec

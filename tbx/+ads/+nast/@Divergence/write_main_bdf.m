@@ -43,6 +43,8 @@ end
     mni.printing.cards.PARAM('AUNITS','r',0.1019716).writeToFile(fid);
     mni.printing.cards.MDLPRM('HDF5','i',0).writeToFile(fid);
 
+    % mni.printing.cards.PARAM('FKSYMFAC','r',0).writeToFile(fid);
+
     % write divergence related cards
     mni.printing.bdf.writeComment(fid,'Divergence Cards')
     mni.printing.bdf.writeColumnDelimiter(fid,'8');

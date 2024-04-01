@@ -6,10 +6,13 @@ clear all
 %% Create the FeModel
 
 % get baff model from private function
-model = UniformBaffWing();
+BarChordwisePos = 0.15;
+model = UniformBaffWing(BarChordwisePos=BarChordwisePos,IncludeTipMass=false,IncludeMasses=false);
 
 %convert to an FE Model
-fe = ads.baff.baff2fe(model);
+opts = ads.baff.BaffOpts();
+opts.SplitBeamsAtChildren = false;
+fe = ads.baff.baff2fe(model,opts);
 
 % plot the model
 f = figure(1);
@@ -21,9 +24,9 @@ ax.Clipping = false;
 ax.ZAxis.Direction = "reverse";
 axis equal
 
-%% Setup 103 Analysis with Nastran
+%% Setup 144 Analysis with Nastran
 U = 18;  % velocity in m/s
-aoa = 10; % AoA in degrees
+aoa = 1; % AoA in degrees
 
 %flatten the FE model and update the element ID numbers
 fe = fe.Flatten;
@@ -41,7 +44,7 @@ IDs = fe.UpdateIDs();
 % create the 'sol' object and update the IDs
 sol = ads.nast.Sol144();
 sol.set_trim_locked(U,1.225,0); %V, rho, Mach
-sol.ANGLEA.Value = -deg2rad(aoa);
+sol.ANGLEA.Value = deg2rad(aoa);
 sol.Grav_Vector = [0 0 1];
 sol.LoadFactor = 0;
 sol.UpdateID(IDs);
@@ -56,16 +59,35 @@ resFile = mni.result.hdf5(filename);
 res = resFile.read_displacements;
 
 % load Nastran model and plot deformation
-f = figure(2);
-clf;
-nas_model = mni.import_matran(fullfile(char(BinFolder),'Source','sol144.bdf'),'LogFcn',@(a,b,c)fprintf(''));
-nas_model.draw(f);
-[~,i] = ismember(nas_model.GRID.GID,res.GID);
-nas_model.GRID.Deformation = [res.X(i),res.Y(i),res.Z(i)]';
-nas_model.update()
-ax = gca;
-ax.Clipping = false;
-ax.ZAxis.Direction = "reverse";
-axis equal
+% f = figure(2);
+% clf;
+% nas_model = mni.import_matran(fullfile(char(BinFolder),'Source','sol144.bdf'),'LogFcn',@(a,b,c)fprintf(''));
+% nas_model.draw(f);
+% [~,i] = ismember(nas_model.GRID.GID,res.GID);
+% nas_model.GRID.Deformation = [res.X(i),res.Y(i),res.Z(i)]';
+% nas_model.update()
+% ax = gca;
+% ax.Clipping = false;
+% ax.ZAxis.Direction = "reverse";
+% axis equal
 % you can click things in the legend to hide them and move around the model
 % with the mouse
+
+%% plot twist
+f = figure(12);
+clf;
+hold on
+ys = res.RY(2:21);
+xs = linspace(0,1,length(ys));
+plot(xs,ys,'DisplayName',[sprintf('%.0f',BarChordwisePos*100),'%'])
+ylabel('Twist [rad]')
+xlabel('normailised spanwise position')
+grid on
+ax = gca;
+ax.FontSize = 10;
+
+lg = legend();
+lg.FontSize = 10;
+lg.Location = 'northwest';
+
+
