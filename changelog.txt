@@ -17,6 +17,7 @@ and this project adheres to [Explicit Versioning](https://github.com/exadra37-ve
 - [0.1.0.5] option to attach chcildren to closest node in x direction rather than gloablly
 - [0.1.0.5] constraints can now print support card for unsupport DoFs
 - [0.1.0.8] added divergence solution type
+- [0.1.0.11] added ability to selectively not build aero panels for each wing element.
 ### Changed
 - [0.1.0.5] Sol101 now uses a constraint object to define CoM not a point object.
 ### Deprecated
