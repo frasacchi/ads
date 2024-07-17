@@ -51,12 +51,14 @@ for i = 1:M_idx
     x = [mode_data.(opts.XAxis)];
     y = opts.YScaling([mode_data.(opts.YAxis)]);
     plt_opts = namedargs2cell(pltOpts);
-    pl(i) = plot(x,y,plt_opts{:});
-    pl(i).Color = opts.Colors(mod(i-1,size(opts.Colors,1))+1,:);
-    if ~isempty(opts.DisplayName)
-        pl(i).DisplayName = [opts.DisplayName,' ',num2str(i)];
-    else
-        pl(i).Annotation.LegendInformation.IconDisplayStyle = 'off';
+    if length(x)==length(y) && ~isempty(x)
+        pl(i) = plot(x,y,plt_opts{:});
+        pl(i).Color = opts.Colors(mod(i-1,size(opts.Colors,1))+1,:);
+        if ~isempty(opts.DisplayName)
+            pl(i).DisplayName = [opts.DisplayName,' ',num2str(i)];
+        else
+            pl(i).Annotation.LegendInformation.IconDisplayStyle = 'off';
+        end
     end
     hold on
 end
