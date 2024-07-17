@@ -1,6 +1,6 @@
-function varargout = atmos(h,varargin)
+function [rho,a,T,P,nu,z,sigma] = atmos(h,tOffset)
 %  ATMOS  Find gas properties in the 1976 Standard Atmosphere.
-%   [rho,a,T,P,nu,z,sigma] = ATMOS(h,varargin)
+%   [rho,a,T,P,nu,z,sigma] = ATMOS(h,opts)
 %
 %   ATMOS by itself gives atmospheric properties at sea level on a standard day.
 %
@@ -15,30 +15,19 @@ function varargout = atmos(h,varargin)
 %                    offset. Note that this is an offset, so when converting
 %                    between Celsius and Fahrenheit, use only the scaling factor
 %                    (dC/dF = dK/dR = 5/9).
-%     tAbsolute    - Similar to tOffest, but an absolute air temperature is 
-%                    provided (°K or °R) instead of an offset from the standard 
-%                    temperature. Supersedes tOffset if both are provided.
-%     altType      - Specify type of input altitude, either 'geopotential' (h)
-%                    or 'geometric' (z). Default altType = 'geopotential'.
-%     structOutput - When set, ATMOS produces a single struct output with fields
-%                    rho, a, T, P, nu, and either z or h (whichever complements
-%                    input altType). Default structOutput = false.
-%     units        - String for units of inputs and outpus, either 'SI'
-%                    (default) or 'US'. This is ignored if the provided input h
-%                    is a DimVar, in which case all outputs are also DimVars and
-%                    expected tOffset is either a DimVar or in °C/°K.
-%                                 Description:         SI:           US:
-%                     Input:      --------------       -----         -----
-%                       h | z     Altitude or height   m             ft
-%                       tOffset   Temp. offset         °C/°K         °F/°R
-%                     Output:     --------------       -----         -----
-%                       rho       Density              kg/m^3        slug/ft^3
-%                       a         Speed of sound       m/s           ft/s
-%                       T         Temperature          °K            °R
-%                       P         Pressure             Pa            lbf/ft^2
-%                       nu        Kinem. viscosity     m^2/s         ft^2/s
-%                       z | h     Height or altitude   m             ft
-%                       sigma     Density ratio        -             -
+%
+%                                 Description:         SI:
+%                     Input:      --------------       -----
+%                       h | z     Altitude or height   m
+%                       tOffset   Temp. offset         °C/°K
+%                     Output:     --------------       -----
+%                       rho       Density              kg/m^3
+%                       a         Speed of sound       m/s
+%                       T         Temperature          °K
+%                       P         Pressure             Pa
+%                       nu        Kinem. viscosity     m^2/s
+%                       z | h     Height or altitude   m
+%                       sigma     Density ratio        -
 %
 %   ATMOS returns properties the same size as h and/or tOffset (P does not vary
 %   with temperature offset and is always the size of h).
@@ -89,81 +78,22 @@ function varargout = atmos(h,varargin)
 %   www.mathworks.com/matlabcentral/fileexchange/authors/101715
 % 
 %   References: ESDU 77022; www.pdas.com/atmos.html
-%% User-customizable defaults:
-defaultUnits = 'SI'; % Alternate: 'US'
-defaultStructOutput = false;
-%% Parse inputs:
-if nargin == 0
+arguments
     h = 0;
+    tOffset = 0;
 end
-if nargin <= 1 && ~nnz(h)
+
+%% Parse inputs:
+if length(h)==1 && h==0 && tOffset==0
     % Quick return of sea level conditions.
     rho = 1.225;
     a = sqrt(115800);
-    temp = 288.15;
-    press = 101325;
-    kvisc = (1.458e-6 * temp.^1.5 ./ 398.55) ./ rho;
-    ZorH = 0;
-    if isa(h,'DimVar')
-        rho = rho*u.kg/(u.m^3);
-        if nargout == 1
-            varargout = {rho};
-            return
-        end
-        a = a*u.m/u.s;
-        temp = temp*u.K;
-        press = press*u.Pa;
-        kvisc = kvisc*u.m^2/u.s;
-        ZorH = ZorH*u.m;
-    end
-    varargout = {rho,a,temp,press,kvisc,ZorH,1};
+    T = 288.15;
+    P = 101325;
+    nu = (1.458e-6 * T.^1.5 ./ 398.55) ./ rho;
+    z = 0;
+    sigma = 1;
     return
-end
-% validateattributes(h,{'DimVar' 'numeric'},{'finite' 'real'});
-p = inputParser;
-addParameter(p,'tOffset',0);
-addParameter(p,'tAbsolute',[]);
-addParameter(p,'units',defaultUnits);
-addParameter(p,'altType','geopotential');
-addParameter(p,'structOutput',defaultStructOutput);
-parse(p,varargin{:});
-tOffset = p.Results.tOffset; 
-tAbsolute = p.Results.tAbsolute;
-if strcmpi(p.Results.units,'SI')
-    convertUnits = false;
-elseif strcmpi(p.Results.units,'US')
-    convertUnits = true;
-    % Flag if I need to convert to/from SI.
-else
-    error('Invalid units. Expected: ''SI'' or ''US''.')
-end    
-if strcmpi(p.Results.altType,'geopotential')
-    geomFlag = false;
-elseif strcmpi(p.Results.altType,'geometric')
-    geomFlag = true;
-    % Flag specifying z provided as input.
-else
-    error('Invalid altType. Expected: ''geopotential'' or ''geometric''.')
-end
-structOutput = p.Results.structOutput;
-%% Deal with different input types:
-dimVarOut = false;
-if isa(h,'DimVar')
-    h = h/u.m;
-    dimVarOut = true;
-    convertUnits = false; % Trumps specified units.
-end
-if isa(tOffset,'DimVar')
-    tOffset = tOffset/u.K;
-    % It is allowed to mix DimVar h_in and double tOffset (or reverse). 
-end
-if isa(tAbsolute,'DimVar')
-    tAbsolute = tAbsolute/u.K;
-end
-if convertUnits
-    h = h * 0.3048;
-    tOffset   = tOffset   * 5/9;
-    tAbsolute = tAbsolute * 5/9;
 end
 %% Constants, etc.:
 %  Lapse rate Base Temp       Base Geop. Alt    Base Pressure
@@ -183,86 +113,43 @@ g0 = 9.80665;   %m/sec^2
 RE = 6356766;   %Radius of the Earth, m
 Bs = 1.458e-6;  %N-s/m2 K1/2
 S = 110.4;      %K
-K = D(:,1);	%°K/m
-T = D(:,2);	%°K
+K_D = D(:,1);	%°K/m
+T_D = D(:,2);	%°K
 H = D(:,3);	%m
-P = D(:,4);	%Pa
-R = P(1)/T(1)/rho0; %N-m/kg-K
+P_D = D(:,4);	%Pa
+R = P_D(1)/T_D(1)/rho0; %N-m/kg-K
 % Ref:
 %   287.05287 N-m/kg-K: value from ESDU 77022
 %   287.0531 N-m/kg-K:  value used by MATLAB aerospace toolbox ATMOSISA
-%% Convert from geometric altitude to geopotental altitude, if necessary.
-if geomFlag
-    hGeop = (RE*h) ./ (RE + h);
-else
-    hGeop = h;
-end
 %% Calculate temperature and pressure:
 % Pre-allocate.
-temp = zeros(size(h));
-press = temp;
+[T,P] = deal(zeros(size(h)));
 nSpheres = size(D,1);
 for i = 1:nSpheres
     % Put inputs into the right altitude bins:
     if i == 1 % Extrapolate below first defined atmosphere.
-        n = hGeop <= H(2);
+        n = h <= H(2);
     elseif i == nSpheres % Capture all above top of defined atmosphere.
-        n = hGeop > H(nSpheres);
+        n = h > H(nSpheres);
     else 
-        n = hGeop <= H(i+1) & hGeop > H(i);
+        n = h <= H(i+1) & h > H(i);
     end
-    
-    
-    if K(i) == 0 % No temperature lapse.
-        temp(n) = T(i);
-        press(n) = P(i) * exp(-g0*(hGeop(n)-H(i))/(T(i)*R));
+       
+    if K_D(i) == 0 % No temperature lapse.
+        T(n) = T_D(i);
+        P(n) = P_D(i) * exp(-g0*(h(n)-H(i))/(T_D(i)*R));
     else
-        TonTi = 1 + K(i)*(hGeop(n) - H(i))/T(i);
-        temp(n) = TonTi*T(i); 
-        press(n) = P(i) * TonTi.^(-g0/(K(i)*R)); % Undefined for K = 0.
+        TonTi = 1 + K_D(i)*(h(n) - H(i))/T_D(i);
+        T(n) = TonTi*T_D(i); 
+        P(n) = P_D(i) * TonTi.^(-g0/(K_D(i)*R)); % Undefined for K = 0.
     end
 end
 %% Switch between using standard temp and provided absolute temp.
-if isempty(tAbsolute)
-    % No absolute temperature provided - use tOffset.
-    temp = temp + tOffset;
-else
-    temp = tAbsolute;
-end
+T = T + tOffset;
 %% Populate the rest of the parameters:
-rho = press./temp/R;
+rho = P./T/R;
 sigma = rho/rho0;
-a = sqrt(gamma * R * temp);
-kvisc = (Bs * temp.^1.5 ./ (temp + S)) ./ rho; %m2/s
-if geomFlag % Geometric in, ZorH is geopotential altitude (H)
-    ZorH = hGeop;
-else % Geop in, find Z
-    ZorH = RE*hGeop./(RE-hGeop);
-end
-%% Process outputs:
-if dimVarOut
-    rho = rho*u.kg/(u.m^3);
-    a = a*u.m/u.s;
-    temp = temp*u.K;
-    press = press*u.Pa;
-    kvisc = kvisc*u.m^2/u.s;
-    ZorH = ZorH*u.m;
-elseif convertUnits
-    rho = rho / 515.3788;
-    a = a / 0.3048;
-    temp = temp * 1.8;
-    press = press / 47.88026;
-    kvisc = kvisc / 0.09290304;
-    ZorH = ZorH / 0.3048;
-end
-varargout = {rho,a,temp,press,kvisc,ZorH,sigma};
-if structOutput
-    if geomFlag
-        ZorHname = 'h';
-    else
-        ZorHname = 'z';
-    end
-    names = {'rho' 'a' 'T' 'P' 'nu' ZorHname 'sigma'};
-    varargout = {cell2struct(varargout,names,2)};
-end
+a = sqrt(gamma * R * T);
+nu = (Bs * T.^1.5 ./ (T + S)) ./ rho; %m2/s
+z = RE*h./(RE-h);
 end
