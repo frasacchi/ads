@@ -46,13 +46,13 @@ classdef AeroSettings < ads.fe.Element
                 mni.printing.bdf.writeColumnDelimiter(fid,"short")
                 for i = 1:length(obj)
                     acsid = obj(i).ACSID.ID;
-                    if acsid == 0
-                        acsid = [];
-                    end
+%                     if acsid == 0
+%                         acsid = [];
+%                     end
                     rcsid = obj(i).RCSID.ID;
-                    if rcsid == 0
-                        rcsid = [];
-                    end
+%                     if rcsid == 0
+%                         rcsid = [];
+%                     end
                     SYMXZ = obj(i).SymXZ;
                     % if ~SYMXZ
                     %     SYMXZ = [];

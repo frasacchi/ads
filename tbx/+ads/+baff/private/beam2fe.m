@@ -29,6 +29,7 @@ end
 % generate nodes
 for i = 1:length(Etas)
     fe.Points(i) = ads.fe.Point(nodes(:,i),InputCoordSys=CS);
+    fe.Forces(i) = ads.fe.Force([0;0;0],fe.Points(i));
 end
 
 % check if material is stiff

@@ -56,7 +56,8 @@ end
     % write GRAV + loads
     mni.printing.bdf.writeComment(fid,'Gravity Card')
     mni.printing.bdf.writeColumnDelimiter(fid,'8');
-    mni.printing.cards.LOAD(obj.Load_ID,1,[obj.Grav_ID,obj.ForceIDs],[1,ones(size(obj.ForceIDs))]).writeToFile(fid);
+%     mni.printing.cards.LOAD(obj.Load_ID,1,[obj.Grav_ID,obj.ForceIDs],[1,ones(size(obj.ForceIDs))]).writeToFile(fid);
+    mni.printing.cards.LOAD(obj.Load_ID,1,obj.ForceIDs',ones(1,length(obj.ForceIDs))).writeToFile(fid);
     mni.printing.cards.GRAV(obj.Grav_ID,obj.g*obj.LoadFactor,obj.Grav_Vector)...
         .writeToFile(fid);
     % genric options 
