@@ -38,11 +38,11 @@ classdef Material < ads.fe.Element
     end
     methods(Static)
         function obj = Aluminium()
-            obj = ads.fe.Material(97e3,0.3,2710);
-            obj.Name = "Aluminium";
+            obj = baff.Material(71.7e9,0.33,2810);
+            obj.Name = "Aluminium7075";
         end
         function obj = Stainless304()
-            obj = ads.fe.Material(193e3,0.29,7930);
+            obj = ads.fe.Material(193e9,0.29,7930);
             obj.Name = "Stainless304";
         end
         function obj = Stiff()

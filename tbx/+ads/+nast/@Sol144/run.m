@@ -30,7 +30,7 @@ end
 modelFile = string(fullfile(pwd,binFolder,'Source','Model','model.bdf'));
 feModel.Export(modelFile);
 
-% add control surfaces to tirm parameters
+% add control surfaces to trim parameters
 for i = 1:length(feModel.ControlSurfaces)
     cs = feModel.ControlSurfaces(i);
     opts.trimObjs(end+1) = ads.nast.TrimParameter(cs.Name,cs.Deflection,"Control Surface");
