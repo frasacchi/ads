@@ -38,7 +38,7 @@ classdef Material < ads.fe.Element
     end
     methods(Static)
         function obj = Aluminium()
-            obj = baff.Material(71.7e9,0.33,2810);
+            obj = ads.fe.Material(71.7e9,0.33,2810);
             obj.Name = "Aluminium7075";
         end
         function obj = Stainless304()
