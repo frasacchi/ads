@@ -5,6 +5,7 @@ classdef ControlSurface < ads.fe.Element
     properties
         AeroSurfaces (:,1) ads.fe.AeroSurface = ads.fe.AeroSurface.empty;
         SID (1,1) double = nan;
+        SID_struct (1,1) double = nan;
         CID (1,1) double = nan;
         ControllerID (1,1) double = nan;
         DeflectionLimit (2,1) double = [-pi/2,pi/2];
@@ -12,6 +13,8 @@ classdef ControlSurface < ads.fe.Element
 
         LinkedSurface string = ""; % name of linked surface
         LinkedCoefficent = 1;
+
+        StructuralPoints (:,1) ads.fe.Point = ads.fe.Point.empty;
     end
     
     methods
@@ -38,7 +41,8 @@ classdef ControlSurface < ads.fe.Element
             for i = 1:length(obj)
                 % for AELIST cards
                 obj(i).SID = ids.SID;
-                ids.SID = ids.SID + 1;
+                obj(i).SID_struct = ids.SID + 1;
+                ids.SID = ids.SID + 2;
                 % for local Coordsys cards
                 obj(i).CID = ids.CID;
                 ids.CID = ids.CID + 1;
@@ -59,6 +63,14 @@ classdef ControlSurface < ads.fe.Element
                 CS(i).ID = obj(i).CID;
             end
             CS.Export(fid);
+            % if structal points add a set cadrd to group them
+            mni.printing.bdf.writeComment(fid,"SETS : Defines sets of structural points connected to each control surface");
+            mni.printing.bdf.writeColumnDelimiter(fid,"short")
+            for i = 1:length(obj)
+                if ~isempty(obj(i).StructuralPoints)
+                    mni.printing.cards.SET1(obj(i).SID_struct,[obj(i).StructuralPoints.ID]).writeToFile(fid);
+                end
+            end
             %create AELIST cards
             mni.printing.bdf.writeComment(fid,"AELIST : Defines lists of aero panel IDs for each control surface");
             mni.printing.bdf.writeColumnDelimiter(fid,"short")

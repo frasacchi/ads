@@ -24,6 +24,7 @@ classdef AeroSurface < ads.fe.Element
         LiftCurveSlope = 2*pi;
         MomentCurveSlope = 2*pi;
         IsWall = false; % if true the surface is a wall and will have zero downwash applied to it regardless of angle
+        ControlSurface = ads.fe.ControlSurface.empty;
     end
 
     properties(Dependent)
@@ -134,14 +135,14 @@ classdef AeroSurface < ads.fe.Element
         function ids = UpdateID(obj,ids)
             for i = 1:length(obj)
                 obj(i).ID = ids.EID;
-                % resurve EIDs for each panel and upto 2 Spline cards
-                ids.EID = ids.EID + (obj(i).nSpan*obj(i).nChord) + 2;
+                % resurve EIDs for each panel and upto 3 Spline cards
+                ids.EID = ids.EID + (obj(i).nSpan*obj(i).nChord) + 3;
                 % for PAERO cards
                 obj(i).PID = ids.PID;
                 ids.PID = ids.PID + 1;
                 % for AELIST and SET1 for spline + 1 extra incase two meshes used
                 obj(i).SID = ids.SID:(ids.SID+3);
-                ids.SID = ids.SID + 4;
+                ids.SID = ids.SID + 5;
             end
         end
         function plt_obj = drawElement(obj)
@@ -280,7 +281,7 @@ classdef AeroSurface < ads.fe.Element
                     P2 = obj(i).Points(:,2) + obj(i).ChordVecs(:,2)*obj(i).Chords(2).*(obj(i).CrossEta-obj(i).ChordwisePos(2));
                     X1 = P1 - obj(i).Chords(1)*xDirLocal*obj(i).CrossEta;
                     X4 = P2 - obj(i).Chords(2)*xDirLocal*obj(i).CrossEta;
-                    % if non hinge use nChord and nSpan to define the density of panels
+                    % if no hinge use nChord and nSpan to define the density of panels
                     if isnan(obj(i).HingeEta)
                         mni.printing.cards.CAERO1(obj(i).ID,obj(1).PID,X1,X4,...
                             obj(i).Chords(1),obj(i).Chords(2),1,...
@@ -319,11 +320,28 @@ classdef AeroSurface < ads.fe.Element
                             case 4
                                 mni.printing.bdf.writeColumnDelimiter(fid,"short")
                                 id = obj(i).ID + (obj(i).nSpan*obj(i).nChord);
-                                mni.printing.cards.SPLINE4(id,obj(i).ID,obj(i).SID(1),obj(i).SID(2),USAGE=usage,METH=obj(i).SplineMeth).writeToFile(fid);
-                                mni.printing.cards.AELIST(obj(i).SID(1),obj(i).ID:(id-1)).writeToFile(fid);
-                                mni.printing.cards.SET1(obj(i).SID(2),[obj(i).StructuralPoints.ID]).writeToFile(fid);
+                                % if structural points have been specified on the control surface spline it seperately
+                                if isempty(obj(i).ControlSurface) || isempty(obj(i).ControlSurface(1).StructuralPoints)
+                                    % only add spline for main wing
+                                    mni.printing.cards.SPLINE4(id,obj(i).ID,obj(i).SID(1),obj(i).SID(2),USAGE=usage,METH=obj(i).SplineMeth).writeToFile(fid);
+                                    mni.printing.cards.AELIST(obj(i).SID(1),obj(i).ID:(id-1)).writeToFile(fid);
+                                    mni.printing.cards.SET1(obj(i).SID(2),[obj(i).StructuralPoints.ID]).writeToFile(fid);
+                                else
+                                    % get ids of main wing and control surface aero panels
+                                    p_ids = reshape(obj(i).ID:(id-1),obj(i).nChord,obj(i).nSpan);
+                                    hinge_id = find(obj(i).EtaChord==obj(i).HingeEta,1);
+                                    main_id = reshape(p_ids(1:(hinge_id-1)),1,[]);
+                                    control_id = reshape(p_ids(hinge_id:end),1,[]);
+                                    % add spline for main wing
+                                    mni.printing.cards.SPLINE4(id,obj(i).ID,obj(i).SID(1),obj(i).SID(2),USAGE=usage,METH=obj(i).SplineMeth).writeToFile(fid);
+                                    mni.printing.cards.AELIST(obj(i).SID(1),main_id).writeToFile(fid);
+                                    mni.printing.cards.SET1(obj(i).SID(2),[obj(i).StructuralPoints.ID]).writeToFile(fid);
+                                    % add spline for control surface
+                                    mni.printing.cards.SPLINE4(id+2,obj(i).ID,obj(i).SID(4),obj(i).ControlSurface(1).SID_struct,USAGE=usage,METH=obj(i).SplineMeth).writeToFile(fid);
+                                    mni.printing.cards.AELIST(obj(i).SID(4),control_id).writeToFile(fid);
+                                end
                                 if splitMesh
-                                    mni.printing.cards.SPLINE4(id+1,obj(i).ID,obj(i).SID(1),obj(i).SID(3),USAGE='DISP',METH=obj(i).SplineMeth,FTYPE='WF2',RCORE=0.5).writeToFile(fid);
+                                    mni.printing.cards.SPLINE4(id+1,obj(i).ID,obj(i).SID(1),obj(i).SID(5),USAGE='DISP',METH=obj(i).SplineMeth,FTYPE='WF2',RCORE=0.5).writeToFile(fid);
                                     mni.printing.cards.SET1(obj(i).SID(3),[obj(i).DisplacementPoints.ID]).writeToFile(fid);
                                 end
                             case 6

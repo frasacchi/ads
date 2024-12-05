@@ -21,7 +21,10 @@ and this project adheres to [Explicit Versioning](https://github.com/exadra37-ve
         - sped up atmos function
         - tweeked 1MC to match CS-25
         - add methods to get global coordinates of the beam coordinates 
-
+- [0.1.0.14] added ability to spline control surfaces seperately by
+        - setting baffopt 'SeperateSplineForControlSurfaces' TRUE
+        - making the control surface a rigid body
+        - spline the control surface to points on this rigi body
 ### Changed
 - [0.1.0.5] Sol101 now uses a constraint object to define CoM not a point object.
 ### Deprecated

@@ -3,7 +3,6 @@ classdef Turb < ads.nast.gust.BaseSettings
 properties
     RMS = [];
     LengthScale = convlength(2500,'ft','m');
-
     RLOAD_id = nan;         % to define loading case
     GUST_id = nan;          % to define gust analysis
     RANDOM_id = nan;        % to define random turbulence
