@@ -49,10 +49,14 @@ else
         % add a grid point to define y axis of beam
         dir = stations(i).StationDir;
         dir = dir./norm(dir);
-        fe.Points(end+1) = ads.fe.Point(fe.Points(i).X + dir*0.01,InputCoordSys=CS);
-        fe.RigidBars(end+1) = ads.fe.RigidBar(fe.Points(i),fe.Points(end));
+        A_in = fe.Points(i).InputCoordSys.getAglobal;
+        A_out = fe.Points(i).OutputCoordSys.getAglobal;
+        dir = A_out'*A_in*dir;
+        % fe.Points(end+1) = ads.fe.Point(fe.Points(i).X + dir*0.01,InputCoordSys=CS);
+        % fe.RigidBars(end+1) = ads.fe.RigidBar(fe.Points(i),fe.Points(end));
         fe.Beams(i) = ads.fe.Beam.FromBaffStations(stations(i:i+1),fe.Points(i:i+1),fe.Materials(end));
-        fe.Beams(i).G0 = fe.Points(end);
+        fe.Beams(i).yDir = dir;
+        % fe.Beams(i).G0 = fe.Points(end);
     end
 end
 

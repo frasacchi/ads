@@ -22,6 +22,10 @@ classdef Sol101 < handle
         isFree = false; % if is Free a Boundary condition will be applied to  the Centre of Mass
         CoM = ads.fe.Constraint.empty;
         DoFs = [];
+
+        ExtraCards = mni.printing.cards.BaseCard.empty;
+        ExtraCaseControl = [];
+
     end
     
     methods

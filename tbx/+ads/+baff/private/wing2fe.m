@@ -17,8 +17,8 @@ end
 
 % get interpolated AeroSections
 CS = fe.CoordSys(1);
-idx = Etas>=obj.AeroStations(1).Eta & Etas<=obj.AeroStations(end).Eta;
-Etas = Etas(idx);
+idx = find(Etas>=obj.AeroStations(1).Eta & Etas<=obj.AeroStations(end).Eta);
+
 %% update eta list to include breaks for control surfaces
 % EtaControl = [];
 % for i = 1:length(obj.ControlSurfaces)
@@ -27,18 +27,35 @@ Etas = Etas(idx);
 % Etas = unique([Etas,EtaControl]);
 %create Beam Nodes at each station
 % add LE and TE points
-for i = 1:numel(Etas)
-    Pa = fe.Points(i);
-    X = obj.GetPos(Etas(i));
+function AddLeTe(obj,fe,Eta,Node)
+    X = obj.GetPos(Eta);
     % add LE points
-    X_le = obj.AeroStations.GetPos(Etas(i),0);
+    X_le = obj.AeroStations.GetPos(Eta,0);
     fe.Points(end+1) = ads.fe.Point(X+X_le, InputCoordSys=CS,isAnchor=false,isAttachment=false);
-    fe.RigidBars(end+1) = ads.fe.RigidBar(Pa,fe.Points(end));
+    fe.RigidBars(end+1) = ads.fe.RigidBar(Node,fe.Points(end));
     % add TE points
-    X_te = obj.AeroStations.GetPos(Etas(i),1);
+    X_te = obj.AeroStations.GetPos(Eta,1);
     fe.Points(end+1) = ads.fe.Point(X+X_te, InputCoordSys=CS,isAnchor=false,isAttachment=false);
-    fe.RigidBars(end+1) = ads.fe.RigidBar(Pa,fe.Points(end));
+    fe.RigidBars(end+1) = ads.fe.RigidBar(Node,fe.Points(end));
 end
+
+% check a point will be added at the left of the wing
+if abs(Etas(idx(1))-obj.AeroStations(1).Eta)>0.01
+    [~,ii] = min(abs(Etas-obj.AeroStations(1).Eta));
+    AddLeTe(obj,fe,obj.AeroStations(1).Eta,fe.Points(ii))
+end
+% add block of nodes
+for i = 1:numel(idx)
+    AddLeTe(obj,fe,Etas(idx(i)),fe.Points(idx(i)))
+end
+% check a point has been added at the left of the wing
+if abs(Etas(idx(end))-obj.AeroStations(end).Eta)>0.01
+    [~,ii] = min(abs(Etas-obj.AeroStations(end).Eta));
+    AddLeTe(obj,fe,obj.AeroStations(end).Eta,fe.Points(ii))
+end
+
+
+
 %% update aerosurface list to include breaks for control surfaces
 % find all etas
 etas = unique([[obj.AeroStations.Eta],reshape([obj.ControlSurfaces.Etas],1,[])]);
