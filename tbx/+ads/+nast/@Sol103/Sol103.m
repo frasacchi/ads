@@ -20,6 +20,8 @@ classdef Sol103 < handle
         g = 9.81;
         Grav_Vector = [0;0;1];
 
+        WriteToF06 = true; % if false minimises whats written to f06.
+
         % CoM Info for Boundary Constraints
         isFree = false; % if is Free a Boundary condition will be applied to  the Centre of Mass
         CoM = ads.fe.Constraint.empty;

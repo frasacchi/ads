@@ -16,12 +16,19 @@ println(fid,'SOL 101');
 println(fid,'CEND');
 mni.printing.bdf.writeHeading(fid,'Case Control')
 println(fid,'ECHO=NONE');
-println(fid,'VECTOR(SORT1,REAL)=ALL');
+if obj.WriteToF06
+    println(fid,'DISPLACEMENT(SORT1,REAL)=ALL');
+    println(fid,'FORCE(SORT1,REAL)=ALL');
+    println(fid,'VECTOR(SORT1,REAL)=ALL');
+    println(fid,'GROUNDCHECK=YES');
+else
+    println(fid,'DISPLACEMENT(SORT1,REAL,PLOT)=ALL');
+    println(fid,'FORCE(SORT1,REAL,PLOT)=ALL');
+    println(fid,'VECTOR(SORT1,REAL,PLOT)=ALL');
+    println(fid,'GROUNDCHECK=NO');
+end
 fprintf(fid,'SPC=%.0f\n',obj.SPC_ID);
 fprintf(fid,'LOAD=%.0f\n',obj.Load_ID);
-println(fid,'DISPLACEMENT(SORT1,REAL)=ALL');
-println(fid,'FORCE(SORT1,REAL)=ALL');
-println(fid,'GROUNDCHECK=YES');
 % extra case control lines
 if ~isempty(obj.ExtraCaseControl)
     for i = 1:length(obj.ExtraCaseControl)
@@ -36,7 +43,6 @@ for i = 1:length(includes)
     mni.printing.cards.INCLUDE(includes(i)).writeToFile(fid);
 end
 % genric options
-mni.printing.cards.PARAM('POST','i',0).writeToFile(fid);
 mni.printing.cards.PARAM('WTMASS','r',1).writeToFile(fid);
 mni.printing.cards.PARAM('SNORM','r',20).writeToFile(fid);
 mni.printing.cards.PARAM('AUTOSPC','s','YES').writeToFile(fid);

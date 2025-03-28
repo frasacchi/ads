@@ -46,6 +46,10 @@ while attempt<opts.NumAttempts+1
     fprintf('Computing sol103 for Model %s ... ',obj.Name);
     command = [ads.nast.getExe,' ','sol103.bdf',...
         ' ',sprintf('out=..%s%s%s',filesep,'bin',filesep)];
+    % command = [command, ' ','scr=YES'];
+    % command = [command, ' ','smp=4'];
+    % command = [command, ' ','solve=auto'];
+    % command = [command, ' ','gpuid=0'];
     if opts.Silent
         command = [command,' ','1>NUL 2>NUL'];
     end

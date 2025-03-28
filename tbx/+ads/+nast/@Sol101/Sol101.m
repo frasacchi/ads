@@ -18,6 +18,8 @@ classdef Sol101 < handle
         SPCs = [];
         ForceIDs = [];
 
+        WriteToF06 = true; % if false minimises whats written to f06.
+
         % CoM Info for Boundary Constraints
         isFree = false; % if is Free a Boundary condition will be applied to  the Centre of Mass
         CoM = ads.fe.Constraint.empty;

@@ -15,12 +15,22 @@ println(fid,'SOL 103');
 println(fid,'CEND');
 mni.printing.bdf.writeHeading(fid,'Case Control')
 println(fid,'ECHO=NONE');
-println(fid,'VECTOR(SORT1,REAL)=ALL');
+
 fprintf(fid,'METHOD=%.0f\n',obj.EigR_ID);
 fprintf(fid,'SPC=%.0f\n',obj.SPC_ID);
-println(fid,'DISPLACEMENT(SORT1,REAL)=ALL');
-println(fid,'FORCE(SORT1,REAL)=ALL');
-println(fid,'GROUNDCHECK=YES');
+if obj.WriteToF06
+    println(fid,'DISPLACEMENT(SORT1,REAL)=ALL');
+    println(fid,'FORCE(SORT1,REAL)=ALL');
+    println(fid,'VECTOR(SORT1,REAL)=ALL');
+    println(fid,'GROUNDCHECK=YES');
+else
+    println(fid,'DISPLACEMENT(SORT1,REAL,PLOT)=ALL');
+    println(fid,'FORCE(SORT1,REAL,PLOT)=ALL');
+    println(fid,'VECTOR(SORT1,REAL,PLOT)=ALL');
+    println(fid,'GROUNDCHECK=NO');
+end
+
+% println(fid,'GROUNDCHECK=YES');
 mni.printing.bdf.writeHeading(fid,'Begin Bulk')
 %% Bulk Data
 println(fid,'BEGIN BULK')
@@ -29,7 +39,6 @@ for i = 1:length(includes)
     mni.printing.cards.INCLUDE(includes(i)).writeToFile(fid);
 end
 % genric options
-mni.printing.cards.PARAM('POST','i',0).writeToFile(fid);
 mni.printing.cards.PARAM('WTMASS','r',1).writeToFile(fid);
 mni.printing.cards.PARAM('SNORM','r',20).writeToFile(fid);
 mni.printing.cards.PARAM('AUTOSPC','s','YES').writeToFile(fid);
@@ -47,7 +56,7 @@ mni.printing.cards.SPCADD(obj.SPC_ID,obj.SPCs).writeToFile(fid);
 %create eigen solver and frequency bounds
 mni.printing.bdf.writeComment(fid,'Eigen Decomposition Method')
 mni.printing.bdf.writeColumnDelimiter(fid,'8');
-mni.printing.cards.EIGR(obj.EigR_ID,'MGIV','F1',0,...
+mni.printing.cards.EIGR(obj.EigR_ID,'AGIV','F1',0,...
     'F2',obj.FreqRange(2),'NORM','MAX')...
     .writeToFile(fid);
 %     mni.printing.cards.EIGR(10,'MGIV','ND',42,'NORM','MAX')...

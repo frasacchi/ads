@@ -8,6 +8,7 @@ for i = 1:length(obj)
     % generate mass
     fe.Masses(i) = ads.fe.Mass(obj(i).GetElementMass,fe.Points(i));
     fe.Masses(i).InertiaTensor = obj(i).InertiaTensor;
+    fe.Masses(i).Name = obj(i).Name;
 end
 end
 
