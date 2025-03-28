@@ -25,6 +25,8 @@ and this project adheres to [Explicit Versioning](https://github.com/exadra37-ve
         - setting baffopt 'SeperateSplineForControlSurfaces' TRUE
         - making the control surface a rigid body
         - spline the control surface to points on this rigi body
+- [0.1.0.16] added concept of inertia for added aero mass
+        - added ability to minimise whats written to f06 in sol101 and 103 cals
 ### Changed
 - [0.1.0.5] Sol101 now uses a constraint object to define CoM not a point object.
 ### Deprecated
