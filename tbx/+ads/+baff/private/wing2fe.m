@@ -1,7 +1,7 @@
 function fe = wing2fe(obj,baffOpts)
 arguments
     obj
-    baffOpts = ads.baff.BaffOpts();
+    baffOpts ads.baff.BaffOpts = ads.baff.BaffOpts();
 end
 % generate underlying beam FE
 fe = beam2fe(obj,baffOpts);
@@ -75,6 +75,30 @@ for i = 1:(length(aeroStations)-1)
     fe.AeroSurfaces(i).ChordVecs = vecs./repmat(vecnorm(vecs),3,1);
     fe.AeroSurfaces(i).CrossEta = 0.5;
     fe.AeroSurfaces(i).LiftCurveSlope = aeroStations(i).LiftCurveSlope;
+end
+%% add Aero Added Mass - for very specific aeroelastic analysis 
+% aim to get 'wind off' modeshape to include the 'added mass'
+% likely very buggy - would need to isolate these mass for trim solutions etc... 
+stAddedMass = obj.AeroStations.interpolate(linspace(etas(1),etas(end),baffOpts.AddedMassStations+1));
+if baffOpts.IncludeAeroAddedMass
+    for i = 1:(length(stAddedMass)-1)
+        cs = [stAddedMass(i:(i+1)).Chord];
+        stEtas = [stAddedMass(i:(i+1)).Eta];
+        stEta = mean(stEtas);
+        st = obj.Stations.interpolate(stEta);
+        dL = (stEtas(2)-stEtas(1))*obj.EtaLength;
+        b = mean(cs)/2; % semi-chord
+        % add point at the centre of the aero panel
+        X_m = obj.AeroStations.GetPos(stEta,0.5) + obj.GetPos(stEta);
+        fe.Points(end+1) = ads.fe.Point(X_m, InputCoordSys=CS,isAnchor=false,isAttachment=false);
+        [~,idx] = min(abs(Etas-stEta));
+        fe.RigidBars(end+1) = ads.fe.RigidBar(fe.Points(idx),fe.Points(end));
+        % add aero added mass at the point
+        rho = baffOpts.AirDensity;
+        M = diag([0,0,1])*(0.5*rho*b^2*pi)*dL;
+        I = abs(diag(st.EtaDir))*rho*pi*b^4/8*dL/norm(st.EtaDir);
+        fe.Inertias(end+1) = ads.fe.Inertia(blkdiag(M,I),fe.Points(end));
+    end
 end
 
 %% Add control surfaces to the aerosurfaces

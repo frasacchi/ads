@@ -6,6 +6,7 @@ classdef Component < handle
         Beams (:,1) ads.fe.Beam = ads.fe.Beam.empty;
         Materials (:,1) ads.fe.Material = ads.fe.Material.empty;
         Masses (:,1) ads.fe.Mass = ads.fe.Mass.empty;
+        Inertias (:,1) ads.fe.Inertia = ads.fe.Inertia.empty;
         RigidBars (:,1) ads.fe.RigidBar = ads.fe.RigidBar.empty;
         Constraints (:,1) ads.fe.Constraint = ads.fe.Constraint.empty;
         Components (:,1) ads.fe.Component = ads.fe.Component.empty;
