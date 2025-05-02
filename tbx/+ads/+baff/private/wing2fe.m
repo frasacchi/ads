@@ -76,6 +76,25 @@ for i = 1:(length(aeroStations)-1)
     fe.AeroSurfaces(i).CrossEta = 0.5;
     fe.AeroSurfaces(i).LiftCurveSlope = aeroStations(i).LiftCurveSlope;
 end
+%% add Secondary mass from Aerodyanmic stations
+stMass = obj.AeroStations.interpolate(linspace(etas(1),etas(end),baffOpts.AddedMassStations+1));
+for i = 1:(length(stMass)-1)
+    stEtas = [stMass(i:(i+1)).Eta];
+    stEta = mean(stEtas);
+    st = stMass.interpolate(stEta);
+    dL = (stEtas(2)-stEtas(1))*obj.EtaLength;
+    if st.HasMass
+        % add point at the centre of mass of the aero station
+        X_m = obj.AeroStations.GetPos(stEta,st.MassLoc) + obj.GetPos(stEta);
+        fe.Points(end+1) = ads.fe.Point(X_m, InputCoordSys=CS,isAnchor=false,isAttachment=false);
+        [~,idx] = min(abs(Etas-stEta));
+        fe.RigidBars(end+1) = ads.fe.RigidBar(fe.Points(idx),fe.Points(end));
+        % add mass at the point
+        fe.Masses(end+1) = ads.fe.Mass(st.LinearDensity.*dL,fe.Points(end),...
+        Ixx=st.LinearInertia(1,1)*dL,Iyy=st.LinearInertia(2,2)*dL,Izz=st.LinearInertia(3,3)*dL,...
+        Ixy=st.LinearInertia(1,2)*dL,Ixz=st.LinearInertia(1,3)*dL,Iyz=st.LinearInertia(2,3)*dL);
+    end
+end
 %% add Aero Added Mass - for very specific aeroelastic analysis 
 % aim to get 'wind off' modeshape to include the 'added mass'
 % likely very buggy - would need to isolate these mass for trim solutions etc... 
@@ -85,7 +104,7 @@ if baffOpts.IncludeAeroAddedMass
         cs = [stAddedMass(i:(i+1)).Chord];
         stEtas = [stAddedMass(i:(i+1)).Eta];
         stEta = mean(stEtas);
-        st = obj.Stations.interpolate(stEta);
+        st = stAddedMass.interpolate(stEta);
         dL = (stEtas(2)-stEtas(1))*obj.EtaLength;
         b = mean(cs)/2; % semi-chord
         % add point at the centre of the aero panel
