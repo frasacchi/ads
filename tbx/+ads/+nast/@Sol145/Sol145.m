@@ -36,6 +36,7 @@ classdef Sol145 < handle
         SDAMP_ID = 7;
         SPCs = [];
         ReducedFreqs = [0.01,0.05,0.1,0.2,0.5,0.75,1,2,4];
+        ReducedMachs = []; % mach numbers to calc aero matrices at, if empty will use linear interpolation from 'Mach'
 
         % CoM Info for Boundary Constraints
         isFree = false; % if is Free a Boundary condition will be applied to  the Centre of Mass

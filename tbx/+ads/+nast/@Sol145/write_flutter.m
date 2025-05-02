@@ -42,7 +42,15 @@ function write_flutter(obj,flutFile)
         obj.FlutterMethod,obj.Flfact_rho_id,...
         obj.Flfact_mach_id,obj.Flfact_v_id,[]);
     f_card.writeToFile(fid);
-    mni.printing.cards.MKAERO1([0,0.1],obj.ReducedFreqs).writeToFile(fid);
+    if isempty(obj.ReducedMachs)
+        Ms = unique(obj.Mach);
+        if length(Ms)>5
+            Ms = linspace(Ms(1),Ms(end),5);
+        end
+    else
+        Ms = obj.ReducedMachs;
+    end
+    mni.printing.cards.MKAERO1(Ms,obj.ReducedFreqs).writeToFile(fid);
     fclose(fid);
 end
 function println(fid,string)
