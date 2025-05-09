@@ -34,7 +34,7 @@ for i = 1:length(xs)
 end
 % create hinge
 hinge = baff.Hinge();
-hinge.HingeVector = baff.util.rotz(FlareAngle)*[1;0;0];
+hinge.HingeVector = -baff.util.rotz(FlareAngle)*[0;1;0];
 hinge.Rotation = -FoldAngle;
 hinge.isLocked = 0;
 hinge.Eta = 1;
