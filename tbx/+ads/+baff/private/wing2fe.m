@@ -77,7 +77,7 @@ for i = 1:(length(aeroStations)-1)
     fe.AeroSurfaces(i).LiftCurveSlope = aeroStations(i).LiftCurveSlope;
 end
 %% add Secondary mass from Aerodyanmic stations
-stMass = obj.AeroStations.interpolate(linspace(etas(1),etas(end),baffOpts.AddedMassStations+1));
+stMass = obj.AeroStations.interpolate(linspace(etas(1),etas(end),baffOpts.SecondaryMassStation+1));
 for i = 1:(length(stMass)-1)
     stEtas = [stMass(i:(i+1)).Eta];
     stEta = mean(stEtas);
