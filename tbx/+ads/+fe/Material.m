@@ -7,7 +7,7 @@ classdef Material < ads.fe.Element
         G = 0;
         rho = 0;
         nu = 0;
-        Yield = nan;
+        yield = nan;
         ID double = nan;
     end
     
@@ -53,7 +53,7 @@ classdef Material < ads.fe.Element
             arguments
                 mat baff.Material
             end
-            obj = ads.fe.Material(mat.E,mat.nu,mat.rho);
+            obj = ads.fe.Material(mat.E,mat.nu,mat.rho,yield=mat.yield);
             obj.Name = mat.Name;
         end
     end
