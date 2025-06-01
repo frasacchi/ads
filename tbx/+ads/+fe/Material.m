@@ -12,11 +12,23 @@ classdef Material < ads.fe.Element
     end
     
     methods
-        function obj = Material(E,nu,rho)
+        function obj = Material(E,nu,rho,opts)
+            arguments
+                E double
+                nu double
+                rho double
+                opts.yield double = nan
+                opts.G double = nan
+            end
             obj.E = E;
             obj.nu = nu;
             obj.rho = rho;
-            obj.G  = E / (2 * (1 + nu));
+            if isnan(opts.G)
+                obj.G  = E / (2 * (1 + nu));
+            else
+                obj.G = opts.G;
+            end
+            obj.yield = opts.yield;
         end
         function ids = UpdateID(obj,ids)
             for i = 1:length(obj)
@@ -53,7 +65,7 @@ classdef Material < ads.fe.Element
             arguments
                 mat baff.Material
             end
-            obj = ads.fe.Material(mat.E,mat.nu,mat.rho,yield=mat.yield);
+            obj = ads.fe.Material(mat.E,mat.nu,mat.rho,yield=mat.yield,G=mat.G);
             obj.Name = mat.Name;
         end
     end
