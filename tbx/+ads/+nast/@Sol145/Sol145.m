@@ -6,7 +6,7 @@ classdef Sol145 < handle
         % generic aero parameters
         Name = 'SOL145';
         LoadFactor = 1;
-        V = 0;
+        V (:,1) double {mustBeNonzero}= 1;
         rho = 0;
         Mach = 0;
         AEQR = 1;
@@ -42,8 +42,7 @@ classdef Sol145 < handle
         isFree = false; % if is Free a Boundary condition will be applied to  the Centre of Mass
         CoM = ads.fe.Constraint.empty;
         DoFs = []; 
-    end
-    
+    end    
     methods
         function ids = UpdateID(obj,ids)
                 obj.FlutterID = ids.SID;
