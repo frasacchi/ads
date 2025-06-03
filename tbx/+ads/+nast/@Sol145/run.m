@@ -92,14 +92,15 @@ if opts.UseHdf5
     h5_file = mni.result.hdf5(fullfile(binFolder,'bin','sol145.h5'));
     res = h5_file.read_flutter_summary();
     res_vec = h5_file.read_flutter_eigenvector();
-    %assign eigen vectors to modes if they equate
-    for i = 1:length(res_vec)
-        [~,I] = min(abs([res.CMPLX]-res_vec(i).EigenValue));
-        res(I).IDs = res_vec(i).IDs;
-        res(I).EigenVector = res_vec(i).EigenVector;
-    end
 else
     f06_file = mni.result.f06(fullfile(binFolder,'bin','sol145.f06'));
     res = f06_file.read_flutter();
+    res_vec = f06_file.read_flutter_eigenvector();
+end
+%assign eigen vectors to modes if they equate
+for i = 1:length(res_vec)
+    [~,I] = min(abs([res.CMPLX]-res_vec(i).EigenValue));
+    res(I).IDs = res_vec(i).IDs;
+    res(I).EigenVector = res_vec(i).EigenVector;
 end
 
