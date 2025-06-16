@@ -16,6 +16,9 @@ classdef Component < handle
         AeroSurfaces (:,1) ads.fe.AeroSurface = ads.fe.AeroSurface.empty;
         ControlSurfaces (:,1) ads.fe.ControlSurface = ads.fe.ControlSurface.empty;
         AeroSettings (:,1) ads.fe.AeroSettings = ads.fe.AeroSettings.empty;
+        Shells (:,1) ads.fe.Shell = ads.fe.Shell.empty;
+        RigidBodyElements (:,1) ads.fe.RigidBodyElement = ads.fe.RigidBodyElement.empty;
+
     end
     methods
         function m = GetMass(obj)
