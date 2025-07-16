@@ -142,6 +142,52 @@ classdef Beam < ads.fe.Element
                 end
             end
         end
+
+        %% Added by Ed
+        function EIDs = EIDfromEta(obj, eta)
+            % function to return the Element IDs (EIDs) of the beam element s containing the baff beam station eta. EIDs is a
+            % 2xN array where N is the length of eta. For a given column of EIDs, the two rows are identical UNLESS eta lies
+            % exactly on a GRID (i.e. an element boundary). In this case, the first row contains the INBD element, and the
+            % second row the OUTBD one. 
+            % Returns NaN if beam.Stations were not both created using ads.fe.BeamStation.FromBaffStation, or if eta is
+            % outside the range covered by obj.Beams. The function should also be robust to the beams not being sorted in
+            % order of eta... I think....
+
+            % get the start and end etas of each beam
+            wingStations = [obj.Stations];
+            stationEtas = [[wingStations(1,:).eta]; [wingStations(2,:).eta]];
+
+            % initialise some stuff
+            numQueries = length(eta);
+            EIDs = nan(2,numQueries);
+
+            % work out which element contains our eta
+            for i = 1:numQueries
+                shifted = stationEtas - eta(i);
+                outbdMask = shifted > 0;
+                inbdMask = shifted < 0;
+                exactMask = shifted == 0;
+                outOfRange = all(outbdMask,'all') || all(inbdMask,'all');     % test if the query eta is outside the range represented by beams
+                
+                if any(exactMask,'all')
+                    % special case where eta lies on the border
+                    if any(exactMask(1,:),'all')
+                        EIDs(2,i) = obj(exactMask(1,:)).ID;
+                    end
+                    if any(exactMask(2,:),'all')
+                        EIDs(1,i) = obj(exactMask(2,:)).ID;
+                    end
+                elseif ~outOfRange
+                    % regular case
+                    containsMask = outbdMask(1,:) ~= outbdMask(2,:);
+                    EIDs(1,i) = obj(containsMask).ID;
+                    EIDs(2,i) = obj(containsMask).ID;
+                end
+            end
+
+
+        end
+        %%%%%%%% END %%%%%%%%
     end
     methods(Static)
         function obj = Bar(PointA,PointB,height,width,Material)

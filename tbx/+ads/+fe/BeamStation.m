@@ -8,6 +8,7 @@ classdef BeamStation
         I = eye(3);
         J = 1;
         Mat ads.fe.Material = ads.fe.Material.Aluminium;
+        eta = NaN;
     end
     methods
         function obj = BeamStation(Point,opts)
@@ -59,6 +60,11 @@ classdef BeamStation
                 Mat ads.fe.Material
             end
             obj = ads.fe.BeamStation(p,"A",st.A,"I",st.I,"J",st.J,"Mat",Mat);
+
+            %%% Added by Ed %%%
+            obj.eta = st.Eta;
+            %%%%%%% END %%%%%%%
+
         end
     end
 end
