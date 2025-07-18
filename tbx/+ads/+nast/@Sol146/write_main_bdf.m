@@ -48,6 +48,19 @@ end
     else
         println(fid,'FORCE(SORT1,REAL)= ALL');
     end
+    % EDW: added the below block to print stresses if required. Could do similar for strain if you create a reader function
+    % to go with it, but just dividing the stresses by E in post seemed altoghther less faff...
+    if ~isempty(obj.StressIDs)
+        if any(isnan(obj.StressIDs))
+            println(fid,'STRESS(SORT1,REAL)= NONE');
+        else
+            mni.printing.cases.SET(3,obj.StressIDs).writeToFile(fid);
+            println(fid,'STRESS(SORT1,REAL)= 3');
+        end
+    else
+        println(fid,'STRESS(SORT1,REAL)= ALL');
+    end
+    %%%%%%%%%%%%%% END %%%%%%%%%%%%
     println(fid,'MONITOR = ALL');    
     
     % write gust subcases

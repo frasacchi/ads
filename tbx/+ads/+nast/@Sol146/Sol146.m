@@ -27,6 +27,7 @@ classdef Sol146 < handle
 
         DispIDs = [];
         ForceIDs = [];
+        StressIDs = [];     % EDW: added to mirror the functionality for displacement and force.
 
         % gust data
         Gusts = ads.nast.gust.BaseSettings.empty;
