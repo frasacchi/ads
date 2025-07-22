@@ -187,6 +187,23 @@ classdef Beam < ads.fe.Element
 
 
         end
+
+        function order = getEtaOrder(obj)
+            % order is an array the same length as obj. order(i) gives the index of the ith beam element in order of
+            % ascending eta from the wing root. So if order(4) = j then obj(j) is the 4th beam element from the root. The
+            % starting eta of each element is used to conduct the sorting operation.
+            % you can use this output to get anything you like from fe.beams in eta order, e.g. EIDs = [fe.beams(order).ID] 
+
+            % get the start eta of each beam
+            wingStations = [obj.Stations];
+            startEtas = [wingStations(1,:).eta];
+            
+            % get the sorting order
+            [~, order] = sort(startEtas);
+
+
+        end
+
         %%%%%%%% END %%%%%%%%
     end
     methods(Static)

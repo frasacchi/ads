@@ -46,6 +46,7 @@ classdef Sol144 < handle
         Load_ID = 5;
         SPCs = [];
         ForceIDs = [];
+        StressIDs = [];     % EDW: added to mirror the functionality of the sol146 class
 
         %CoM and constraint Paramters
         g = 9.81;
