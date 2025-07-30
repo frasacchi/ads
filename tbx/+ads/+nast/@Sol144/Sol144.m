@@ -94,6 +94,16 @@ classdef Sol144 < handle
             obj.ANGLEA.Value = 0;
             obj.DoFs = [];
         end
+        
+        %% EDW: add a method to write a .bat file to the same location as the main .bdf. 
+        % This .bat will run the analysis and make NASTRAN write the result to the appropriate .bin folder
+        function writeJobSubmissionBat(~, binFolder)
+            batFile = fullfile(pwd, binFolder, 'Source', 'run144.bat');
+            fid = fopen(batFile,'w');
+            fprintf(fid, '%s \n', 'nastran sol144.bdf out=..\bin\');
+            fclose(fid);
+        end
+        %%%%%%% END %%%%%%%%%
     end
 end
 
