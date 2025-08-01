@@ -39,9 +39,8 @@ end
     println(fid,'MONITOR = ALL');
     println(fid,'SPCFORCES = ALL');
     println(fid,'FORCE(SORT1,REAL) = ALL');         % EDW - leave this as is: sol144.run seems to have some additional functionality which utilises the forceIDs object in a different way to sol146 
-    println(fid,'DISPLACEMENT(SORT1,REAL)=ALL');    % EDW - Again, leave this alone. The f06 is less expensive to write and store in a 144 anyway
+    println(fid,'DISPLACEMENT(SORT1,REAL)=ALL');    % EDW - Again, leave this alone.
 
-    %% added by Ed to mirror functionality of the sol146 class
     % request stresses
     if ~isempty(obj.StressIDs)
         if any(isnan(obj.StressIDs))
@@ -53,7 +52,6 @@ end
     else
         println(fid,'STRESS(SORT1,REAL)= ALL');
     end
-    %%%%%%%%%%% END %%%%%%%%%%
     
     println(fid,'GROUNDCHECK=YES');
     println(fid,'AEROF=ALL');

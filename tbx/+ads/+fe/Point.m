@@ -70,17 +70,15 @@ classdef Point   < matlab.mixin.SetGet & ads.fe.Element
             end
         end
 
-        %% Added by Ed
-
         function GIDs = GRIDfromEta(obj, baffStation, eta)
-            % Return the ads.fe point ID closest to eta. baffStation must be the baff.
+            % Return the ads.fe point ID closest to eta.
             arguments
                 obj
                 baffStation baff.station.Beam
-                eta
+                eta double
             end
 
-            % compute the position of eta in the 'X' system, whatever that is. Will assume eta refers to a point on the spar
+            % compute the position of eta in the 'X' system. Will assume eta refers to a point on the spar
             pos = baffStation.GetPos(eta);
             numQueries  = length(eta);
 

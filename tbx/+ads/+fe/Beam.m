@@ -143,9 +143,8 @@ classdef Beam < ads.fe.Element
             end
         end
 
-        %% Added by Ed
         function EIDs = EIDfromEta(obj, eta)
-            % function to return the Element IDs (EIDs) of the beam element s containing the baff beam station eta. EIDs is a
+            % function to return the Element ID(s) (EIDs) of the beam element(s) containing the baff beam station(S) eta. EIDs is a
             % 2xN array where N is the length of eta. For a given column of EIDs, the two rows are identical UNLESS eta lies
             % exactly on a GRID (i.e. an element boundary). In this case, the first row contains the INBD element, and the
             % second row the OUTBD one. 
@@ -204,7 +203,6 @@ classdef Beam < ads.fe.Element
 
         end
 
-        %%%%%%%% END %%%%%%%%
     end
     methods(Static)
         function obj = Bar(PointA,PointB,height,width,Material)

@@ -7,7 +7,7 @@ end
     fid = fopen(filename,"w");
     mni.printing.bdf.writeFileStamp(fid)
     %% Case Control Section
-    mni.printing.bdf.writeComment(fid,'This file contain the main cards + case control for a 145 solution')
+    mni.printing.bdf.writeComment(fid,'This file contain the main cards + case control for a 146 solution')
     mni.printing.bdf.writeHeading(fid,'Case Control');
     mni.printing.bdf.writeColumnDelimiter(fid,'8');
     println(fid,'NASTRAN BARMASS=1');
@@ -28,39 +28,53 @@ end
     println(fid,sprintf('METHOD = %.0f',obj.EigR_ID));
     
     % println(fid,'VECTOR(SORT1,REAL)=ALL');
+    
+    % check if any of the gusts are turbulence cases
+    turbCount = 0;
+    for i = 1:length(obj.Gusts)
+        turbCount = turbCount + isa(obj.Gusts(i), 'ads.nast.gust.Turb');
+    end
+    
+    % if any gusts are turbulence cases then we'll want the Power Spectral Density Function (PSDF) in output.
+    if turbCount > 0
+        outRqstStr = '(SORT1,REAL,PSDF)';
+    else
+        outRqstStr = '(SORT1,REAL)';
+    end
+
+    % write output requests.
     if ~isempty(obj.DispIDs)
         if any(isnan(obj.DispIDs))
             mni.printing.cases.SET(1,obj.EPoint_ID).writeToFile(fid);
         else
             mni.printing.cases.SET(1,[obj.DispIDs,obj.EPoint_ID]).writeToFile(fid);
         end
-        println(fid,'DISPLACEMENT(SORT1,REAL)= 1');
+        println(fid,['DISPLACEMENT', outRqstStr, ' = 1']);
     else
-        println(fid,'DISPLACEMENT(SORT1,REAL)= ALL');
+        println(fid,['DISPLACEMENT', outRqstStr,' = ALL']);
     end
     if ~isempty(obj.ForceIDs)
         if any(isnan(obj.ForceIDs))
-            println(fid,'FORCE(SORT1,REAL)= NONE');
+            println(fid,['FORCE', outRqstStr, ' = NONE']);
         else
             mni.printing.cases.SET(2,obj.ForceIDs).writeToFile(fid);
-            println(fid,'FORCE(SORT1,REAL)= 2');
+            println(fid,['FORCE', outRqstStr, ' = 2']);
         end
     else
-        println(fid,'FORCE(SORT1,REAL)= ALL');
+        println(fid,['FORCE', outRqstStr, ' = ALL']);
     end
-    % EDW: added the below block to print stresses if required. Could do similar for strain if you create a reader function
-    % to go with it, but just dividing the stresses by E in post seemed altoghther less faff...
+    % Add in a case to print stresses if we want them. Can use similar syntax for strain...
     if ~isempty(obj.StressIDs)
         if any(isnan(obj.StressIDs))
-            println(fid,'STRESS(SORT1,REAL)= NONE');
+            println(fid,['STRESS', outRqstStr, ' = NONE']);
         else
             mni.printing.cases.SET(3,obj.StressIDs).writeToFile(fid);
-            println(fid,'STRESS(SORT1,REAL)= 3');
+            println(fid,['STRESS', outRqstStr, ' = 3']);
         end
     else
-        println(fid,'STRESS(SORT1,REAL)= ALL');
+        println(fid,['STRESS', outRqstStr, ' = ALL']);
     end
-    %%%%%%%%%%%%%% END %%%%%%%%%%%%
+    
     println(fid,'MONITOR = ALL');    
     
     % write gust subcases

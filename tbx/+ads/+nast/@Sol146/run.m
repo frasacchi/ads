@@ -47,11 +47,10 @@ end
 bdfFile = fullfile(pwd,binFolder,'Source','sol146.bdf');
 obj.write_main_bdf(bdfFile,[modelFile,gustFile]);
 
-% EDW: write the bat file if we were asked
+% write the batch file if we were asked
 if opts.createBat
     obj.writeJobSubmissionBat(binFolder);
 end
-%%%%% END %%%%%%
 
 %% Run Analysis
 attempt = 1;

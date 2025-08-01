@@ -10,8 +10,6 @@ arguments
     opts.trimObjs = ads.nast.TrimParameter.empty;
     opts.OutputAeroMatrices logical = false;
     opts.UseHdf5 = true;
-
-    % EDW: add option to create a batch file
     opts.createBat = false;
 end
 obj.OutputAeroMatrices = opts.OutputAeroMatrices;
@@ -61,11 +59,10 @@ end
 bdfFile = fullfile(pwd,binFolder,'Source','sol144.bdf');
 obj.write_main_bdf(bdfFile,[modelFile,trimFile]);
 
-% EDW: write the bat file if we were asked
+% write the batch file if we were asked
 if opts.createBat
     obj.writeJobSubmissionBat(binFolder);
 end
-%%%%% END %%%%%%
 
 %% Run Analysis
 attempt = 1;
