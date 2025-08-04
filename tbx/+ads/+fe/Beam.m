@@ -216,8 +216,8 @@ classdef Beam < ads.fe.Element
                 ps (:,1) ads.fe.Point
                 Mat ads.fe.Material;
             end
-            stations    = ads.fe.BeamStation.FromBaffStation(sts(1),ps(1),Mat);
-            stations(2) = ads.fe.BeamStation.FromBaffStation(sts(2),ps(2),Mat);
+            stations    = ads.fe.BeamStation.FromBaffStation(sts.GetIndex(1),ps(1),Mat);
+            stations(2) = ads.fe.BeamStation.FromBaffStation(sts.GetIndex(2),ps(2),Mat);
 %             yDir = ps(1).InputCoordSys.getAglobal()*[0;1;0];
             yDir = [1;0;0];
             %make beam
