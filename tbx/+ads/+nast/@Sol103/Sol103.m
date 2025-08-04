@@ -37,6 +37,19 @@ classdef Sol103 < handle
         function str = config_string(obj)
             str = '';
         end
+
+
+        %% A method to write a .bat file to the same location as the main .bdf which will run the analysis and make NASTRAN 
+        % write the result to the appropriate bin folder. This is just a convenience if you want to run the analysis without
+        % going via MATLAB.
+        function writeJobSubmissionBat(~, binFolder)
+            batFile = fullfile(pwd, binFolder, 'Source', 'run103.bat');
+            fid = fopen(batFile,'w');
+            fprintf(fid, '%s \n', 'nastran sol103.bdf out=..\bin\');
+            fclose(fid);
+        end    
+
     end
+
 end
 
