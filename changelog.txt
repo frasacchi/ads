@@ -29,6 +29,7 @@ and this project adheres to [Explicit Versioning](https://github.com/exadra37-ve
         - added ability to minimise whats written to f06 in sol101 and 103 cals
 ### Changed
 - [0.1.0.5] Sol101 now uses a constraint object to define CoM not a point object.
+- [0.1.0.23] increased spped of atmos call and added atmosT for fast temperature estimate
 ### Deprecated
 ### Removed
 ### Fixed
