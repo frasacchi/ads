@@ -84,13 +84,13 @@ arguments
 end
 
 %% Parse inputs:
-if length(h)==1 && h==0 && tOffset==0
-    % Quick return of sea level conditions.
+if isscalar(h) && h==0 && tOffset==0
+    % Quick return of sea level conditions - pre-computed values.
     rho = 1.225;
-    a = sqrt(115800);
+    a = 340.2941017; % sqrt(115800) pre-computed
     T = 288.15;
     P = 101325;
-    nu = (1.458e-6 * T.^1.5 ./ 398.55) ./ rho;
+    nu = 1.460636907976601e-05; % Pre-computed sea level viscosity
     z = 0;
     sigma = 1;
     return
@@ -121,35 +121,87 @@ R = P_D(1)/T_D(1)/rho0; %N-m/kg-K
 % Ref:
 %   287.05287 N-m/kg-K: value from ESDU 77022
 %   287.0531 N-m/kg-K:  value used by MATLAB aerospace toolbox ATMOSISA
+% Ref:
+%   287.05287 N-m/kg-K: value from ESDU 77022
+%   287.0531 N-m/kg-K:  value used by MATLAB aerospace toolbox ATMOSISA
 %% Calculate temperature and pressure:
-% Pre-allocate.
-[T,P] = deal(zeros(size(h)));
-nSpheres = size(D,1);
-for i = 1:nSpheres
-    % Put inputs into the right altitude bins:
-    if i == 1 % Extrapolate below first defined atmosphere.
-        n = h <= H(2);
-    elseif i == nSpheres % Capture all above top of defined atmosphere.
-        n = h > H(nSpheres);
-    else 
-        n = h <= H(i+1) & h > H(i);
+% Optimized logic: separate handling for single calls vs arrays
+if isscalar(h)
+    %% SINGLE CALL OPTIMIZATION - Direct calculation without loops
+    % Find the atmospheric layer using simple conditional logic
+    if h <= 11000          % Layer 1: Troposphere
+        T = T_D(1) + K_D(1) * (h - H(1));
+        TonTi = 1 + K_D(1)*(h - H(1))/T_D(1);
+        P = P_D(1) * TonTi.^(-g0/(K_D(1)*R));
+    elseif h <= 20000      % Layer 2: Tropopause (isothermal)
+        T = T_D(2);
+        P = P_D(2) * exp(-g0*(h-H(2))/(T_D(2)*R));
+    elseif h <= 32000      % Layer 3: Stratosphere 1
+        T = T_D(3) + K_D(3) * (h - H(3));
+        TonTi = 1 + K_D(3)*(h - H(3))/T_D(3);
+        P = P_D(3) * TonTi.^(-g0/(K_D(3)*R));
+    elseif h <= 47000      % Layer 4: Stratosphere 2
+        T = T_D(4) + K_D(4) * (h - H(4));
+        TonTi = 1 + K_D(4)*(h - H(4))/T_D(4);
+        P = P_D(4) * TonTi.^(-g0/(K_D(4)*R));
+    elseif h <= 51000      % Layer 5: Stratopause (isothermal)
+        T = T_D(5);
+        P = P_D(5) * exp(-g0*(h-H(5))/(T_D(5)*R));
+    elseif h <= 71000      % Layer 6: Mesosphere 1
+        T = T_D(6) + K_D(6) * (h - H(6));
+        TonTi = 1 + K_D(6)*(h - H(6))/T_D(6);
+        P = P_D(6) * TonTi.^(-g0/(K_D(6)*R));
+    elseif h <= 84852.04584490575  % Layer 7: Mesosphere 2
+        T = T_D(7) + K_D(7) * (h - H(7));
+        TonTi = 1 + K_D(7)*(h - H(7))/T_D(7);
+        P = P_D(7) * TonTi.^(-g0/(K_D(7)*R));
+    else                   % Layer 8: Mesopause (isothermal, extrapolation)
+        T = T_D(8);
+        P = P_D(8) * exp(-g0*(h-H(8))/(T_D(8)*R));
     end
-       
-    if K_D(i) == 0 % No temperature lapse.
-        T(n) = T_D(i);
-        P(n) = P_D(i) * exp(-g0*(h(n)-H(i))/(T_D(i)*R));
-    else
-        TonTi = 1 + K_D(i)*(h(n) - H(i))/T_D(i);
-        T(n) = TonTi*T_D(i); 
-        P(n) = P_D(i) * TonTi.^(-g0/(K_D(i)*R)); % Undefined for K = 0.
+    
+else
+    %% ARRAY OPTIMIZATION - Use loop for arrays (better for complex pressure calculations)
+    % Pre-allocate.
+    [T,P] = deal(h*0);
+    nSpheres = size(D,1);
+
+    % Optimized approach: process all altitudes for each layer
+    for i = 1:nSpheres
+        % Determine which altitudes belong to this layer
+        if i == 1 % Extrapolate below first defined atmosphere.
+            n = h <= H(2);
+        elseif i == nSpheres % Capture all above top of defined atmosphere.
+            n = h > H(nSpheres);
+        else 
+            n = h <= H(i+1) & h > H(i);
+        end
+        
+        % Skip if no points in this layer
+        if ~any(n), continue; end
+        
+        % Extract only the altitudes in this layer (reduces memory operations)
+        h_layer = h(n);
+        
+        if K_D(i) == 0 % No temperature lapse.
+            T(n) = T_D(i);
+            P(n) = P_D(i) * exp(-g0*(h_layer-H(i))/(T_D(i)*R));
+        else
+            TonTi = 1 + K_D(i)*(h_layer - H(i))/T_D(i);
+            T(n) = TonTi*T_D(i); 
+            P(n) = P_D(i) * TonTi.^(-g0/(K_D(i)*R)); % Undefined for K = 0.
+        end
     end
 end
 %% Switch between using standard temp and provided absolute temp.
 T = T + tOffset;
 %% Populate the rest of the parameters:
-rho = P./T/R;
+% Pre-compute common terms
+rho = P./(T*R);  % Slightly more efficient than P./T/R
 sigma = rho/rho0;
 a = sqrt(gamma * R * T);
-nu = (Bs * T.^1.5 ./ (T + S)) ./ rho; %m2/s
+% Optimize viscosity calculation
+T_pow_1_5 = T.^1.5;
+nu = (Bs * T_pow_1_5 ./ (T + S)) ./ rho; %m2/s
 z = RE*h./(RE-h);
 end

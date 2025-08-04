@@ -142,6 +142,67 @@ classdef Beam < ads.fe.Element
                 end
             end
         end
+
+        function EIDs = EIDfromEta(obj, eta)
+            % function to return the Element ID(s) (EIDs) of the beam element(s) containing the baff beam station(S) eta. EIDs is a
+            % 2xN array where N is the length of eta. For a given column of EIDs, the two rows are identical UNLESS eta lies
+            % exactly on a GRID (i.e. an element boundary). In this case, the first row contains the INBD element, and the
+            % second row the OUTBD one. 
+            % Returns NaN if beam.Stations were not both created using ads.fe.BeamStation.FromBaffStation, or if eta is
+            % outside the range covered by obj.Beams. The function should also be robust to the beams not being sorted in
+            % order of eta... I think....
+
+            % get the start and end etas of each beam
+            wingStations = [obj.Stations];
+            stationEtas = [[wingStations(1,:).eta]; [wingStations(2,:).eta]];
+
+            % initialise some stuff
+            numQueries = length(eta);
+            EIDs = nan(2,numQueries);
+
+            % work out which element contains our eta
+            for i = 1:numQueries
+                shifted = stationEtas - eta(i);
+                outbdMask = shifted > 0;
+                inbdMask = shifted < 0;
+                exactMask = shifted == 0;
+                outOfRange = all(outbdMask,'all') || all(inbdMask,'all');     % test if the query eta is outside the range represented by beams
+                
+                if any(exactMask,'all')
+                    % special case where eta lies on the border
+                    if any(exactMask(1,:),'all')
+                        EIDs(2,i) = obj(exactMask(1,:)).ID;
+                    end
+                    if any(exactMask(2,:),'all')
+                        EIDs(1,i) = obj(exactMask(2,:)).ID;
+                    end
+                elseif ~outOfRange
+                    % regular case
+                    containsMask = outbdMask(1,:) ~= outbdMask(2,:);
+                    EIDs(1,i) = obj(containsMask).ID;
+                    EIDs(2,i) = obj(containsMask).ID;
+                end
+            end
+
+
+        end
+
+        function order = getEtaOrder(obj)
+            % order is an array the same length as obj. order(i) gives the index of the ith beam element in order of
+            % ascending eta from the wing root. So if order(4) = j then obj(j) is the 4th beam element from the root. The
+            % starting eta of each element is used to conduct the sorting operation.
+            % you can use this output to get anything you like from fe.beams in eta order, e.g. EIDs = [fe.beams(order).ID] 
+
+            % get the start eta of each beam
+            wingStations = [obj.Stations];
+            startEtas = [wingStations(1,:).eta];
+            
+            % get the sorting order
+            [~, order] = sort(startEtas);
+
+
+        end
+
     end
     methods(Static)
         function obj = Bar(PointA,PointB,height,width,Material)
@@ -155,8 +216,8 @@ classdef Beam < ads.fe.Element
                 ps (:,1) ads.fe.Point
                 Mat ads.fe.Material;
             end
-            stations    = ads.fe.BeamStation.FromBaffStation(sts(1),ps(1),Mat);
-            stations(2) = ads.fe.BeamStation.FromBaffStation(sts(2),ps(2),Mat);
+            stations    = ads.fe.BeamStation.FromBaffStation(sts.GetIndex(1),ps(1),Mat);
+            stations(2) = ads.fe.BeamStation.FromBaffStation(sts.GetIndex(2),ps(2),Mat);
 %             yDir = ps(1).InputCoordSys.getAglobal()*[0;1;0];
             yDir = [1;0;0];
             %make beam

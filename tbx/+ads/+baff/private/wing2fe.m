@@ -17,7 +17,7 @@ end
 
 % get interpolated AeroSections
 CS = fe.CoordSys(1);
-idx = find(Etas>=obj.AeroStations(1).Eta & Etas<=obj.AeroStations(end).Eta);
+idx = find(Etas>=obj.AeroStations.Eta(1) & Etas<=obj.AeroStations.Eta(end));
 
 %% update eta list to include breaks for control surfaces
 % EtaControl = [];
@@ -40,59 +40,56 @@ function AddLeTe(obj,fe,Eta,Node)
 end
 
 % check a point will be added at the left of the wing
-if abs(Etas(idx(1))-obj.AeroStations(1).Eta)>0.01
-    [~,ii] = min(abs(Etas-obj.AeroStations(1).Eta));
-    AddLeTe(obj,fe,obj.AeroStations(1).Eta,fe.Points(ii))
+if abs(Etas(idx(1))-obj.AeroStations.Eta(1))>0.01
+    [~,ii] = min(abs(Etas-obj.AeroStations.Eta(1)));
+    AddLeTe(obj,fe,obj.AeroStations.Eta(1),fe.Points(ii))
 end
 % add block of nodes
 for i = 1:numel(idx)
     AddLeTe(obj,fe,Etas(idx(i)),fe.Points(idx(i)))
 end
 % check a point has been added at the left of the wing
-if abs(Etas(idx(end))-obj.AeroStations(end).Eta)>0.01
-    [~,ii] = min(abs(Etas-obj.AeroStations(end).Eta));
-    AddLeTe(obj,fe,obj.AeroStations(end).Eta,fe.Points(ii))
+if abs(Etas(idx(end))-obj.AeroStations.Eta(end))>0.01
+    [~,ii] = min(abs(Etas-obj.AeroStations.Eta(end)));
+    AddLeTe(obj,fe,obj.AeroStations.Eta(end),fe.Points(ii))
 end
 
 
 
 %% update aerosurface list to include breaks for control surfaces
 % find all etas
-etas = unique([[obj.AeroStations.Eta],reshape([obj.ControlSurfaces.Etas],1,[])]);
-aeroStations = obj.AeroStations.interpolate(etas);
+etas = unique([obj.AeroStations.Eta,reshape([obj.ControlSurfaces.Etas],1,[])]);
+st = obj.AeroStations.interpolate(etas);
 %% Add aero surfaces
 %create surfaces
-for i = 1:(length(aeroStations)-1)
-    bls = [aeroStations(i:(i+1)).BeamLoc];
-    cs = [aeroStations(i:(i+1)).Chord];
-    stEtas = [aeroStations(i:(i+1)).Eta];
-    Twists = [aeroStations(i:(i+1)).Twist];
-    Xs = [obj.GetPos(stEtas(1)),obj.GetPos(stEtas(2))];
-    fe.AeroSurfaces(i) = ads.fe.AeroSurface(Xs,bls,cs,StructuralPoints=fe.Points,...
-        CoordSys=CS,Twists=Twists);
-    vecs = [aeroStations(i).GetPos(nan,1)-aeroStations(i).GetPos(nan,0), ...
-        aeroStations(i+1).GetPos(nan,1)-aeroStations(i+1).GetPos(nan,0)];
+for i = 1:(st.N-1)
+    sts = st.GetIndex(i:(i+1));
+    Xs = [obj.GetPos(st.Eta(i)),obj.GetPos(st.Eta(i+1))];
+    fe.AeroSurfaces(i) = ads.fe.AeroSurface(Xs,sts.BeamLoc,sts.Chord,StructuralPoints=fe.Points,...
+        CoordSys=CS,Twists=sts.Twist);
+    vecs = [st.GetPos(st.Eta(i),1)-st.GetPos(st.Eta(i),0), ...
+        st.GetPos(st.Eta(i+1),1)-st.GetPos(st.Eta(i+1),0)];
     fe.AeroSurfaces(i).ChordVecs = vecs./repmat(vecnorm(vecs),3,1);
     fe.AeroSurfaces(i).CrossEta = 0.5;
-    fe.AeroSurfaces(i).LiftCurveSlope = aeroStations(i).LiftCurveSlope;
+    fe.AeroSurfaces(i).LiftCurveSlope = st.LiftCurveSlope(i);
 end
 %% add Secondary mass from Aerodyanmic stations
 stMass = obj.AeroStations.interpolate(linspace(etas(1),etas(end),baffOpts.SecondaryMassStation+1));
-for i = 1:(length(stMass)-1)
-    stEtas = [stMass(i:(i+1)).Eta];
+for i = 1:(stMass.N-1)
+    stEtas = stMass.Eta(i:(i+1));
     stEta = mean(stEtas);
-    st = stMass.interpolate(stEta);
+    sti = stMass.interpolate(stEta);
     dL = (stEtas(2)-stEtas(1))*obj.EtaLength;
-    if st.HasMass
+    if sti.HasMass
         % add point at the centre of mass of the aero station
-        X_m = obj.AeroStations.GetPos(stEta,st.MassLoc) + obj.GetPos(stEta);
+        X_m = obj.AeroStations.GetPos(stEta,sti.MassLoc) + obj.GetPos(stEta);
         fe.Points(end+1) = ads.fe.Point(X_m, InputCoordSys=CS,isAnchor=false,isAttachment=false);
         [~,idx] = min(abs(Etas-stEta));
         fe.RigidBars(end+1) = ads.fe.RigidBar(fe.Points(idx),fe.Points(end));
         % add mass at the point
         fe.Masses(end+1) = ads.fe.Mass(st.LinearDensity.*dL,fe.Points(end),...
-        Ixx=st.LinearInertia(1,1)*dL,Iyy=st.LinearInertia(2,2)*dL,Izz=st.LinearInertia(3,3)*dL,...
-        Ixy=st.LinearInertia(1,2)*dL,Ixz=st.LinearInertia(1,3)*dL,Iyz=st.LinearInertia(2,3)*dL);
+        Ixx=sti.LinearInertia(1,1)*dL,Iyy=sti.LinearInertia(2,2)*dL,Izz=sti.LinearInertia(3,3)*dL,...
+        Ixy=sti.LinearInertia(1,2)*dL,Ixz=sti.LinearInertia(1,3)*dL,Iyz=sti.LinearInertia(2,3)*dL);
     end
 end
 %% add Aero Added Mass - for very specific aeroelastic analysis 
@@ -100,11 +97,11 @@ end
 % likely very buggy - would need to isolate these mass for trim solutions etc... 
 stAddedMass = obj.AeroStations.interpolate(linspace(etas(1),etas(end),baffOpts.AddedMassStations+1));
 if baffOpts.IncludeAeroAddedMass
-    for i = 1:(length(stAddedMass)-1)
-        cs = [stAddedMass(i:(i+1)).Chord];
-        stEtas = [stAddedMass(i:(i+1)).Eta];
+    for i = 1:(stAddedMass.N-1)
+        cs = stAddedMass.Chord(i:(i+1));
+        stEtas = stAddedMass.Eta(i:(i+1));
         stEta = mean(stEtas);
-        st = stAddedMass.interpolate(stEta);
+        sti = stAddedMass.interpolate(stEta);
         dL = (stEtas(2)-stEtas(1))*obj.EtaLength;
         b = mean(cs)/2; % semi-chord
         % add point at the centre of the aero panel
@@ -115,7 +112,7 @@ if baffOpts.IncludeAeroAddedMass
         % add aero added mass at the point
         rho = baffOpts.AirDensity;
         M = diag([0,0,1])*(0.5*rho*b^2*pi)*dL;
-        I = abs(diag(st.EtaDir))*rho*pi*b^4/8*dL/norm(st.EtaDir);
+        I = abs(diag(sti.EtaDir))*rho*pi*b^4/8*dL/norm(sti.EtaDir);
         fe.Inertias(end+1) = ads.fe.Inertia(blkdiag(M,I),fe.Points(end));
     end
 end
@@ -138,7 +135,6 @@ for i = 1:length(obj.ControlSurfaces)
         X2 = obj.GetPos(obj.ControlSurfaces(i).Etas(2));
         X_h1 = obj.AeroStations.GetPos(obj.ControlSurfaces(i).Etas(1),HingeEta);
         X_h2 = obj.AeroStations.GetPos(obj.ControlSurfaces(i).Etas(end),HingeEta);
-
 
          % add second main wing point TE*
          fe.Points(end+1) = ads.fe.Point(X2+X_h2, InputCoordSys=CS,isAnchor=false,isAttachment=false);
@@ -195,8 +191,8 @@ for i = 1:length(obj.ControlSurfaces)
     end
     % add aero panels on control surface to a list
     idx = 0;
-    for j = 1:(length(aeroStations)-1)
-        if aeroStations(j).Eta >= obj.ControlSurfaces(i).Etas(1) && aeroStations(j).Eta < obj.ControlSurfaces(i).Etas(2)
+    for j = 1:(st.N-1)
+        if st.Eta(j) >= obj.ControlSurfaces(i).Etas(1) && st.Eta(j) < obj.ControlSurfaces(i).Etas(2)
             fe.AeroSurfaces(j).ControlSurface = fe.ControlSurfaces(i);
             fe.AeroSurfaces(j).HingeEta = (1-obj.ControlSurfaces.pChord(1));
             idx = idx + 1;

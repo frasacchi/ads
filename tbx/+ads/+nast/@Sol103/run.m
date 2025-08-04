@@ -7,6 +7,7 @@ arguments
     opts.NumAttempts = 3;
     opts.BinFolder string = '';
     opts.IncludeEigenVec = true;
+    opts.createBat = false;
 end
 
 %% create BDFs
@@ -36,6 +37,11 @@ end
 %create main BDF file
 bdfFile = fullfile(pwd,binFolder,'Source','sol103.bdf');
 obj.write_main_bdf(bdfFile,[modelFile]);
+
+% write the batch file if we were asked
+if opts.createBat
+    obj.writeJobSubmissionBat(binFolder);
+end
 
 %% Run Analysis
 attempt = 1;

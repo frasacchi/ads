@@ -10,14 +10,11 @@ fe.Name = obj.Name;
 fe.CoordSys(1) = ads.fe.CoordSys("Origin",obj.Offset,"A",obj.A);
 CS = fe.CoordSys(1);
 
-%check stations in correct order
-if ~issorted([obj.Stations.Eta])
-    error('beam stations must be in assending order with respect to eta')
-end
 
 %check stations in correct order
-[~,st_idx] = sort([obj.Stations.Eta]);
-obj.Stations = obj.Stations(st_idx);
+if ~issorted(obj.Stations.Eta)
+    error('Station Etas must be in ascending order')
+end
 
 % get dicretised Eta positions
 Etas = GetDiscreteEta(obj,baffOpts);
@@ -32,20 +29,20 @@ for i = 1:length(Etas)
 end
 
 % check if material is stiff
-if obj.Stations(1).Mat.E == inf
+if obj.Stations.Mat(1).E == inf
     %generate rigid bars
-    stations = obj.Stations.interpolate(Etas);
-    for i = 1:length(stations)-1
+    st = obj.Stations.interpolate(Etas);
+    for i = 1:st.N-1
         fe.RigidBars(end+1) = ads.fe.RigidBar(fe.Points(i),fe.Points(i+1));
     end
 else
     %generate material
-    fe.Materials(end+1) = ads.fe.Material.FromBaffMat(obj.Stations(1).Mat);
+    fe.Materials(end+1) = ads.fe.Material.FromBaffMat(obj.Stations.Mat(1));
     
     % generate Beam elements
-    stations = obj.Stations.interpolate(Etas);
-    for i = 1:length(stations)-1
-        fe.Beams(i) = ads.fe.Beam.FromBaffStations(stations(i:i+1),fe.Points(i:i+1),fe.Materials(end));
+    st = obj.Stations.interpolate(Etas);
+    for i = 1:st.N-1
+        fe.Beams(i) = ads.fe.Beam.FromBaffStations(st.GetIndex(i:i+1),fe.Points(i:i+1),fe.Materials(end));
     end
 end
 

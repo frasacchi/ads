@@ -5,7 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Explicit Versioning](https://github.com/exadra37-versioning/explicit-versioning).
 
-## [Unreleased]
+
+## [0.2.x.x]
+### Added
+### Changed
+- [0.2.0.0] increased speed of atmos call and added atmosT for fast temperature estimate
+### Deprecated
+### Removed
+### Fixed
+- [0.2.0.0] Updated baff building to baff 0.2.x where stations are handled differently
+
+
+## [0.1.x.x]
 ### Added
 - [0.1.0.1] added user preference for Nastran exe
 - [0.1.0.2] removed user pref for Nastran Ver as it causes issues on some machines

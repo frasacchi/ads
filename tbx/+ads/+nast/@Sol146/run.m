@@ -7,6 +7,9 @@ arguments
     opts.NumAttempts = 1;
     opts.BinFolder string = '';
     opts.TruelySilent = false;
+
+    % EDW: add option to create a batch file
+    opts.createBat = false;
 end
 
 %% create BDFs
@@ -43,6 +46,11 @@ end
 %create main BDF file
 bdfFile = fullfile(pwd,binFolder,'Source','sol146.bdf');
 obj.write_main_bdf(bdfFile,[modelFile,gustFile]);
+
+% write the batch file if we were asked
+if opts.createBat
+    obj.writeJobSubmissionBat(binFolder);
+end
 
 %% Run Analysis
 attempt = 1;
