@@ -10,15 +10,28 @@ properties
     TableRand_id = nan;     % to define turbulence spectrum
 
     Type = 'VonKarman';
+
+    % user specified psdf
+    userFreqs = NaN;        % frequencies for TABRND1 entry
+    userPSDs = NaN;         % PSD values corresponding to frequencies in userFreqs
+    userAxisTypes = {"LINEAR", "LINEAR"}
 end
 methods
-    function obj = Turb(TurbRMS,TurbType)
+    function obj = Turb(TurbRMS, TurbType, userFreqs, userPSDs, opts)
         arguments
             TurbRMS double
-            TurbType char {mustBeMember(TurbType,{'VonKarman'})} = 'VonKarman'
+            TurbType char {mustBeMember(TurbType,{'VonKarman', 'user'})} = 'VonKarman'
+            userFreqs (1,:) double = NaN
+            userPSDs (1,:) double = NaN
+            opts.userXtype string  {mustBeMember(opts.userXtype,["LINEAR","LOG"])} = "LINEAR"
+            opts.userYtype string  {mustBeMember(opts.userYtype,["LINEAR","LOG"])} = "LINEAR"
         end
+
         obj.RMS = TurbRMS;
         obj.Type = TurbType;
+        obj.userFreqs = userFreqs;
+        obj.userPSDs = userPSDs;
+        obj.userAxisTypes = {opts.userXtype, opts.userYtype};
     end
     function ids = UpdateID(obj,ids)
         obj.RLOAD_id = ids.SID;
@@ -50,7 +63,9 @@ methods
                     obj.LengthScale = convlength(2500,'ft','m');
                 end
             otherwise
-                error('Incorrect Gust Type')
+                if ~strcmp(obj.Type,'user')
+                    error('Incorrect Gust Type')
+                end
         end
     end
     function write_bdf(obj,fid,DAREA_id,V,idx,opts)
@@ -71,7 +86,13 @@ methods
         mni.printing.cards.RLOAD1(obj.RLOAD_id,DAREA_id,'TC',obj.TABLED1_id).writeToFile(fid);
         mni.printing.cards.TABLED1(obj.TABLED1_id,opts.FreqRange,ones(size(opts.FreqRange))).writeToFile(fid);
         mni.printing.cards.RANDPS(obj.RANDOM_id,idx,idx,1,0,"TID",obj.TableRand_id).writeToFile(fid);
-        mni.printing.cards.TABRNDG(obj.TableRand_id,1,obj.LengthScale/V,obj.RMS).writeToFile(fid);
+        if strcmp(obj.Type,'VonKarman')
+            mni.printing.cards.TABRNDG(obj.TableRand_id,1,obj.LengthScale/V,obj.RMS).writeToFile(fid);
+        elseif strcmp(obj.Type,'user')
+            mni.printing.cards.TABRND1(obj.TableRand_id, obj.userFreqs, obj.userPSDs, XAXIS=obj.userAxisTypes{1}, YAXIS=obj.userAxisTypes{2}).writeToFile(fid);
+        else
+            error(strcat("'", obj.Type, "' is not a valid turbulence type"))
+        end
     end
 end
 end

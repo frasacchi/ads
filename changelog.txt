@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Explicit Versioning](https://github.com/exadra37-versioning/explicit-versioning).
 
+## [Unreleased]
+### Added
+- nast.gust.Turb now allows the user to specify their own velocity PSDF in a random turbulence analysis. 
+### Changed
+### Deprecated
+### Removed
+### Fixed
+
 
 ## [0.2.x.x]
 ### Added
