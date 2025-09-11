@@ -2,8 +2,8 @@ function model = sol101(bin_folder)
 close all
 model = mni.import_matran(fullfile(bin_folder,'Source','sol101.bdf'));
 model.draw;
-f06 =  mni.result.f06(fullfile(bin_folder,'bin','sol101.f06'));
-res_disp = f06.read_disp();
+res =  mni.result.f06(fullfile(bin_folder,'bin','sol101.f06'));
+res_disp = res.read_disp();
 
 % apply deformation result
 [~,i] = ismember(model.GRID.GID,res_disp.GP);

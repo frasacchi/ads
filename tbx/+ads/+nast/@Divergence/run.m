@@ -9,6 +9,7 @@ arguments
     opts.BinFolder string = '';
     opts.trimObjs = ads.nast.TrimParameter.empty;
     opts.UseHdf5 = true;
+    opts.cmdLineArgs struct = struct.empty;
 end
 %% create BDFs
 binFolder = ads.nast.create_tmp_bin('BinFolder',opts.BinFolder);
@@ -56,11 +57,8 @@ while attempt<opts.NumAttempts+1
         fprintf('Computing sol144 diveregence for Model %s at %.0f mach Numbers ... ',...
             obj.Name,length(obj.Mach));
     end
-    command = [ads.nast.getExe,' ','sol144_div.bdf',...
-        ' ',sprintf('out=..%s%s%s',filesep,'bin',filesep)];
-    if opts.Silent || opts.TruelySilent
-        command = [command,' ','1>NUL 2>NUL'];
-    end
+    command = ads.nast.buildCommand('sol144_div.bdf',...
+        cmdLineArgs=opts.cmdLineArgs,Silent=(opts.Silent || opts.TruelySilent));
     if opts.TruelySilent
         system(command);
     else     

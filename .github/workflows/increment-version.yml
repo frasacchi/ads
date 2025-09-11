@@ -1,0 +1,123 @@
+name: Increment Version
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Version increment type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  increment-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get current branch name
+        id: current_branch
+        run: |
+          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+          echo "name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+          echo "Current branch: $BRANCH_NAME"
+
+      - name: Configure Git author
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Get current version
+        id: current_version
+        run: |
+          CURRENT_VERSION=$(tr -d '\r' < version.txt | tr -d '\n')
+          if [[ ! $CURRENT_VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid version in version.txt: '$CURRENT_VERSION' (expected X.Y.Z)" >&2
+            exit 1
+          fi
+          echo "current=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $CURRENT_VERSION"
+
+      - name: Calculate new version
+        id: new_version
+        run: |
+          CURRENT="${{ steps.current_version.outputs.current }}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+          
+          case "${{ github.event.inputs.version_type }}" in
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+          esac
+          
+          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+          echo "new=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "New version: $NEW_VERSION"
+
+      - name: Update version.txt and commit to current branch
+        run: |
+          echo "${{ steps.new_version.outputs.new }}" > version.txt
+          git add version.txt
+          git commit -m "Bump version to ${{ steps.new_version.outputs.new }}"
+          git push origin ${{ steps.current_branch.outputs.name }}
+
+      - name: Create Pull Request to master
+        if: steps.current_branch.outputs.name != 'master'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Create PR using GitHub CLI API
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            /repos/${{ github.repository }}/pulls \
+            -f title="Release ${{ steps.new_version.outputs.new }}" \
+            -f body="## Release ${{ steps.new_version.outputs.new }}
+
+          This PR contains the version bump from \`${{ steps.current_version.outputs.current }}\` to \`${{ steps.new_version.outputs.new }}\`.
+
+          **Source branch**: \`${{ steps.current_branch.outputs.name }}\`
+          **Version type**: ${{ github.event.inputs.version_type }}
+
+          ### Changes
+          - Updated \`version.txt\` to \`${{ steps.new_version.outputs.new }}\`
+          - Any other changes from the \`${{ steps.current_branch.outputs.name }}\` branch
+
+          Once this PR is merged, the tag and release workflow will automatically:
+          - Create a git tag \`v${{ steps.new_version.outputs.new }}\`
+          - Create a GitHub release with generated release notes
+
+          ### Checklist
+          - [ ] Version number is correct
+          - [ ] All tests pass
+          - [ ] Ready for release" \
+            -f head="${{ steps.current_branch.outputs.name }}" \
+            -f base="master"
+
+      - name: Skip PR creation - already on master
+        if: steps.current_branch.outputs.name == 'master'
+        run: |
+          echo "Already on master branch. Version updated directly."
+          echo "The tag and release workflow will trigger automatically."

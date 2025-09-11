@@ -28,11 +28,11 @@ classdef Moment < ads.fe.Element
                 mni.printing.bdf.writeComment(fid,"MOMENT : Defines a monment at a point");
                 mni.printing.bdf.writeColumnDelimiter(fid,"short");
                 for i = 1:length(obj)
-                    nM = norm(obj.M);
+                    nM = norm(obj(i).M);
                     if nM == 0
                         N = [0 0 1];
                     else
-                        N = obj.M/nM;
+                        N = obj(i).M/nM;
                     end
                     mni.printing.cards.MOMENT(obj(i).ID,obj(i).Point.ID,nM,N,'CID',obj(i).Point.InputCoordSys.ID).writeToFile(fid);
                 end

@@ -8,6 +8,7 @@ arguments
     opts.NumAttempts = 3;
     opts.BinFolder string = '';
     opts.UseHdf5 = true;
+    opts.cmdLineArgs struct = struct.empty;
 end
 
 %% create BDFs
@@ -51,11 +52,8 @@ while attempt<opts.NumAttempts+1
         fprintf('Computing sol145 for Model %s: %.0f velocities ... ',...
         obj.Name,length(obj.V));
     end
-    command = [ads.nast.getExe,' ','sol145.bdf',...
-        ' ',sprintf('out=..%s%s%s',filesep,'bin',filesep)];
-    if opts.Silent || opts.TruelySilent
-        command = [command,' ','1>NUL 2>NUL'];
-    end
+    command = ads.nast.buildCommand('sol145.bdf',...
+        cmdLineArgs=opts.cmdLineArgs,Silent=(opts.Silent || opts.TruelySilent));
     if opts.TruelySilent
         system(command);
     else     
