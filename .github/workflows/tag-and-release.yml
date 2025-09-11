@@ -2,15 +2,12 @@
 name: Tag and Release
 
 on:
-  push:
-    branches:
-      - master
-    paths:
-      - 'version.txt'
   pull_request:
     types: [closed]
     branches:
       - master
+    paths:
+      - 'version.txt'
 
 permissions:
   contents: write
@@ -18,8 +15,8 @@ permissions:
 jobs:
   tag-and-release:
     runs-on: ubuntu-latest
-    # Only run if it's a push to master OR if the PR was merged (not just closed)
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
+    # Only run if the PR was merged (not just closed)
+    if: github.event.pull_request.merged == true
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
