@@ -6,7 +6,7 @@ arguments
 end
 
 args = struct.empty;
-args(1).out = fullfile('..','bin');
+args(1).out = fullfile('..',['bin',filesep]);
 args.news = 'no';
 args.notify = 'no';
 args.old = 'no';

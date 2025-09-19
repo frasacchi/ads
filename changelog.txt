@@ -7,8 +7,18 @@ and this project adheres to [Explicit Versioning](https://github.com/exadra37-ve
 
 ## [Unreleased]
 ### Added
-- nast.gust.Turb now allows the user to specify their own velocity PSDF in a random turbulence analysis.
-- 103.run, 144.run and 146.run now allow the user to specify extra command line arguments to the Nastran .exe 
+### Changed
+### Deprecated
+### Removed
+### Fixed
+- Typo corrected in nast.sol103.run()
+- Reinstated trailing '\' in nast.buildCommand()
+
+
+## [0.3.x.x]
+### Added
+- [0.3.0.1] nast.gust.Turb now allows the user to specify their own velocity PSDF in a random turbulence analysis.
+- [0.3.0.1] 103.run, 144.run and 146.run now allow the user to specify extra command line arguments to the Nastran .exe 
 ### Changed
 ### Deprecated
 ### Removed
