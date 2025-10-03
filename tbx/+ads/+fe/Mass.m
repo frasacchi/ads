@@ -53,7 +53,39 @@ classdef Mass < ads.fe.Element
             Xs = [ps.GlobalPos];
             plt_obj = plot3(Xs(1,:),Xs(2,:),Xs(3,:),'b^');
             plt_obj.MarkerFaceColor = 'b';
+            plt_obj.MarkerSize = 6;
             plt_obj.Tag = "Mass";
+
+            plt_obj.ButtonDownFcn = @(src, event) displayMassInfo(src, event, obj);
+
+            function displayMassInfo(src, event, obj)
+
+                clickPoint = event.IntersectionPoint;
+
+                allPoints = [src.XData; src.YData; src.ZData];
+
+                distances = vecnorm(allPoints - clickPoint');
+                [~, idx] = min(distances);
+
+                clickedMassObject = obj(idx);
+                mass_call = clickedMassObject.mass*1e3;
+                inertia_call = diag(clickedMassObject.InertiaTensor)*1e6;
+                Xs_call = clickedMassObject.Point.GlobalPos*1e3;
+
+                fprintf('--- Mass %d ---\n', idx);
+                fprintf('Mass (g): %.3f\n', mass_call);
+                fprintf('Inertia (kgmm^2): [%.3f, %.3f, %.3f]\n', inertia_call(1), inertia_call(2), inertia_call(3));
+                fprintf('Position (mm): [%.3f, %.3f, %.3f]\n\n', Xs_call(1),Xs_call(2),Xs_call(3));
+
+                % === Add annotation on the clicked point ===
+                hold on
+                txt = sprintf('Mass %d', idx);
+                text(src.XData(idx), src.YData(idx), src.ZData(idx), txt, ...
+                    'FontSize', 12, 'FontWeight', 'bold', 'Color', 'b', ...
+                    'VerticalAlignment', 'bottom', 'HorizontalAlignment', 'center');
+                hold off
+
+            end
         end
         function Export(obj,fid)
             if ~isempty(obj)
@@ -68,6 +100,7 @@ classdef Mass < ads.fe.Element
                 end
             end
         end
+
     end
 end
 

@@ -3,7 +3,16 @@ arguments
     obj
     baffOpts ads.baff.BaffOpts = ads.baff.BaffOpts();
 end
-% generate underlying beam FE
+% generate underlying beam/shell FE
+%- TODO -- add shell implementation
+
+% if isa(obj.Stations,'baff.Station.Beam')
+% fe = beam2fe(obj,baffOpts);
+% elseif isa(obj.Stations,'baff.Station.ShellStation')
+% fe = shell2fe(obj,baffOpts);
+% end
+
+
 fe = beam2fe(obj,baffOpts);
 Etas = GetDiscreteEta(obj,baffOpts);
 % return if no aero panels reqeuired
@@ -18,6 +27,7 @@ end
 % get interpolated AeroSections
 CS = fe.CoordSys(1);
 idx = find(Etas>=obj.AeroStations.Eta(1) & Etas<=obj.AeroStations.Eta(end));
+idx = find(Etas>=obj.AeroStations(1).Eta & Etas<=obj.AeroStations(end).Eta);
 
 %% update eta list to include breaks for control surfaces
 % EtaControl = [];
@@ -62,13 +72,16 @@ etas = unique([obj.AeroStations.Eta,reshape([obj.ControlSurfaces.Etas],1,[])]);
 st = obj.AeroStations.interpolate(etas);
 %% Add aero surfaces
 %create surfaces
-for i = 1:(st.N-1)
-    sts = st.GetIndex(i:(i+1));
-    Xs = [obj.GetPos(st.Eta(i)),obj.GetPos(st.Eta(i+1))];
-    fe.AeroSurfaces(i) = ads.fe.AeroSurface(Xs,sts.BeamLoc,sts.Chord,StructuralPoints=fe.Points,...
-        CoordSys=CS,Twists=sts.Twist);
-    vecs = [st.GetPos(st.Eta(i),1)-st.GetPos(st.Eta(i),0), ...
-        st.GetPos(st.Eta(i+1),1)-st.GetPos(st.Eta(i+1),0)];
+for i = 1:(length(aeroStations)-1)
+    bls = [aeroStations(i:(i+1)).BeamLoc];
+    cs = [aeroStations(i:(i+1)).Chord];
+    stEtas = [aeroStations(i:(i+1)).Eta];
+    Twists = [aeroStations(i:(i+1)).Twist];
+    Xs = [obj.GetPos(stEtas(1)),obj.GetPos(stEtas(2))];
+    fe.AeroSurfaces(i) = ads.fe.AeroSurface(Xs,bls,cs,StructuralPoints=fe.Points,...
+        CoordSys=CS,Twists=Twists);
+    vecs = [aeroStations(i).GetPos(nan,1)-aeroStations(i).GetPos(nan,0), ...
+        aeroStations(i+1).GetPos(nan,1)-aeroStations(i+1).GetPos(nan,0)];
     fe.AeroSurfaces(i).ChordVecs = vecs./repmat(vecnorm(vecs),3,1);
     fe.AeroSurfaces(i).CrossEta = 0.5;
     fe.AeroSurfaces(i).LiftCurveSlope = st.LiftCurveSlope(i);
