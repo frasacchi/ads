@@ -12,7 +12,7 @@ classdef PlyDefinition
         Layers(:,1) ads.fe.PlyLayer = ads.fe.PlyLayer;
     end
     methods
-        function obj = plyDefinition(Layers,Z0,NSM,SB,FT,TREF,GE,LAM)
+        function obj = PlyDefinition(Layers,Z0,NSM,SB,FT,TREF,GE,LAM)
             arguments
                 Layers(:,1) ads.fe.PlyLayer = ads.fe.PlyLayer;
                 Z0 double = -0.5;
@@ -43,8 +43,8 @@ classdef PlyDefinition
             end
 
             Layers = ads.fe.PlyLayer.empty;
-            for i = 1:length(st.MIDi)
-                Layers(i) = ads.fe.PlyLayer(st.MIDi(i),st.Ii(i),st.THETAi(i),st.SOUTi(i));
+            for i = 1:length(st.Ti)
+                Layers(i) = ads.fe.PlyLayer(st.MIDi(i),st.Ti(i),st.THETAi(i),st.SOUTi(i));
             end
 
             obj = ads.fe.PlyDefinition(Layers,st.Z0,st.NSM,st.SB,st.FT,st.TREF,st.GE,st.LAM);

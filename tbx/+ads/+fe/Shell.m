@@ -134,7 +134,7 @@ classdef Shell < ads.fe.Element
             end
 
             if st.ExportType == "PCOMP" 
-                PlyDef = ads.fe.PlyDefinition.FromBaffStation;
+                PlyDef = ads.fe.PlyDefinition.FromBaffStation(st.ply);
             elseif st.ExportType == "PSHELL" 
                 PlyDef = ads.fe.PlyDefinition.empty;
             end
