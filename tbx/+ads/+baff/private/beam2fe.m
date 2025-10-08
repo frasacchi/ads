@@ -1,4 +1,4 @@
-function fe = beam2fe(obj,baffOpts)
+function [fe,Etas] = beam2fe(obj,baffOpts)
 arguments
     obj
     baffOpts = ads.baff.BaffOpts();
@@ -23,6 +23,7 @@ nodes = obj.GetPos(Etas);
 for i = 1:length(Etas)
     fe.Points(i) = ads.fe.Point(nodes(:,i),InputCoordSys=CS);
     fe.Forces(i) = ads.fe.Force([0;0;0],fe.Points(i));
+    fe.Points(i).Tag = "AttachmentNode";
 end
 
 % check if material is stiff

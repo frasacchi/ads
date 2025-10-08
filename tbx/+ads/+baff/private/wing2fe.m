@@ -5,16 +5,12 @@ arguments
 end
 % generate underlying beam/shell FE
 %- TODO -- add shell implementation
+if isa(obj.Stations,'baff.station.Beam')
+    [fe,Etas] = beam2fe(obj,baffOpts);
+elseif isa(obj.Stations,'baff.station.ShellStation.ShellStation')
+    [fe,Etas] = shell2fe(obj,baffOpts);
+end
 
-% if isa(obj.Stations,'baff.Station.Beam')
-% fe = beam2fe(obj,baffOpts);
-% elseif isa(obj.Stations,'baff.Station.ShellStation')
-% fe = shell2fe(obj,baffOpts);
-% end
-
-
-fe = beam2fe(obj,baffOpts);
-Etas = GetDiscreteEta(obj,baffOpts);
 % return if no aero panels reqeuired
 if ~baffOpts.GenerateAeroPanels
     return
@@ -27,7 +23,7 @@ end
 % get interpolated AeroSections
 CS = fe.CoordSys(1);
 idx = find(Etas>=obj.AeroStations.Eta(1) & Etas<=obj.AeroStations.Eta(end));
-idx = find(Etas>=obj.AeroStations(1).Eta & Etas<=obj.AeroStations(end).Eta);
+idxi = find([fe.Points.Tag] == "AttachmentNode");
 
 %% update eta list to include breaks for control surfaces
 % EtaControl = [];
@@ -56,7 +52,7 @@ if abs(Etas(idx(1))-obj.AeroStations.Eta(1))>0.01
 end
 % add block of nodes
 for i = 1:numel(idx)
-    AddLeTe(obj,fe,Etas(idx(i)),fe.Points(idx(i)))
+    AddLeTe(obj,fe,Etas(idx(i)),fe.Points(idxi(i)))
 end
 % check a point has been added at the left of the wing
 if abs(Etas(idx(end))-obj.AeroStations.Eta(end))>0.01
@@ -64,24 +60,19 @@ if abs(Etas(idx(end))-obj.AeroStations.Eta(end))>0.01
     AddLeTe(obj,fe,obj.AeroStations.Eta(end),fe.Points(ii))
 end
 
-
-
 %% update aerosurface list to include breaks for control surfaces
 % find all etas
 etas = unique([obj.AeroStations.Eta,reshape([obj.ControlSurfaces.Etas],1,[])]);
 st = obj.AeroStations.interpolate(etas);
 %% Add aero surfaces
 %create surfaces
-for i = 1:(length(aeroStations)-1)
-    bls = [aeroStations(i:(i+1)).BeamLoc];
-    cs = [aeroStations(i:(i+1)).Chord];
-    stEtas = [aeroStations(i:(i+1)).Eta];
-    Twists = [aeroStations(i:(i+1)).Twist];
-    Xs = [obj.GetPos(stEtas(1)),obj.GetPos(stEtas(2))];
-    fe.AeroSurfaces(i) = ads.fe.AeroSurface(Xs,bls,cs,StructuralPoints=fe.Points,...
-        CoordSys=CS,Twists=Twists);
-    vecs = [aeroStations(i).GetPos(nan,1)-aeroStations(i).GetPos(nan,0), ...
-        aeroStations(i+1).GetPos(nan,1)-aeroStations(i+1).GetPos(nan,0)];
+for i = 1:(st.N-1)
+    sts = st.GetIndex(i:(i+1));
+    Xs = [obj.GetPos(st.Eta(i)),obj.GetPos(st.Eta(i+1))];
+    fe.AeroSurfaces(i) = ads.fe.AeroSurface(Xs,sts.BeamLoc,sts.Chord,StructuralPoints=fe.Points,...
+        CoordSys=CS,Twists=sts.Twist);
+    vecs = [st.GetPos(st.Eta(i),1)-st.GetPos(st.Eta(i),0), ...
+        st.GetPos(st.Eta(i+1),1)-st.GetPos(st.Eta(i+1),0)];
     fe.AeroSurfaces(i).ChordVecs = vecs./repmat(vecnorm(vecs),3,1);
     fe.AeroSurfaces(i).CrossEta = 0.5;
     fe.AeroSurfaces(i).LiftCurveSlope = st.LiftCurveSlope(i);
@@ -227,4 +218,3 @@ if ~isempty(cs_idx)
     end
 end
 end
-
