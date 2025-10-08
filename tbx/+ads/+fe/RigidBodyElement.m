@@ -35,7 +35,24 @@ classdef RigidBodyElement < ads.fe.Element
                 obj(i).EID = ids.EID;
                 ids.EID = ids.EID + 1;
             end
-        end        
+            end
+            
+            function plt_obj = drawElement(obj)
+            arguments
+                obj
+            end
+            if isempty(obj)
+                plt_obj = [];
+                return
+            end
+            for i = 1:length(obj)
+                for j = 1:numel(obj(i).Gi)
+                Xs = [obj(i).REFGRID.GlobalPos,obj(i).Gi(j).GlobalPos];
+                plt_obj(i) = plot3(Xs(1,:),Xs(2,:),Xs(3,:),'m-');
+                plt_obj(i).Tag = "RBE3";
+                end
+            end
+            end
         
         function Export(obj,fid)
             if ~isempty(obj)
