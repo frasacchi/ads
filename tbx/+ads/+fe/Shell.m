@@ -125,6 +125,9 @@ classdef Shell < ads.fe.Element
             end
         end
 
+
+    end
+    methods(Static)
         function obj = FromBaffStations(st,G,Mat,Thickness)
             arguments
                 st baff.station.ShellStation.Shell
@@ -142,7 +145,6 @@ classdef Shell < ads.fe.Element
             obj = ads.fe.Shell(G,Mat,Thickness,"ExportType",st.ExportType,"ply",PlyDef);
 
         end
-
     end
 
 end
