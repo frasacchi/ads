@@ -57,8 +57,11 @@ classdef Component < handle
                       'WindowButtonUpFcn',      @ads.util.plotting.BtnUpCallback)
             %draw the elements
             plt_obj = obj.drawElement();
+
+            valid_plots = plt_obj(isgraphics(plt_obj));
+
             % make the legend
-            [names,idx] = unique(arrayfun(@(x)string(x.Tag),plt_obj));
+            [names,idx] = unique(arrayfun(@(x)string(x.Tag),valid_plots));
             lg = legend(plt_obj(idx),names,'ItemHitFcn', @ads.util.plotting.cbToggleVisible);
         end
         function plt_obj = drawElement(obj)
