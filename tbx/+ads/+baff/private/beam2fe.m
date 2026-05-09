@@ -19,11 +19,24 @@ end
 Etas = GetDiscreteEta(obj,baffOpts);
 nodes = obj.GetPos(Etas);
 
-% generate nodes
+% generate nodes % TODO Clean!
+c=0;
 for i = 1:length(Etas)
-    fe.Points(i) = ads.fe.Point(nodes(:,i),InputCoordSys=CS);
+    if i>1
+        Anchor = false;
+    else
+        Anchor = true;
+    end
+    % Anchor = true;
+
+    fe.Points(i) = ads.fe.Point(nodes(:,i),InputCoordSys=CS,isAnchor=Anchor);
     fe.Forces(i) = ads.fe.Force([0;0;0],fe.Points(i));
-    fe.Points(i).Tag = "AttachmentNode";
+    fe.Points(i).Tag = "AttachmentNode"; %TODO change name - I hate it!
+
+    if~isempty(obj.ConstraintDoFs) && ~fe.Points(i).isAnchorPoint
+        c=c+1;
+        fe.Constraints(c) = ads.fe.Constraint(fe.Points(i),obj.ConstraintDoFs);
+    end
 end
 
 % check if material is stiff
@@ -49,6 +62,9 @@ else
         fe.Beams(i) = ads.fe.Beam.FromBaffStations(stations.GetIndex(i:i+1),fe.Points(i:i+1),fe.Materials(end));
         fe.Beams(i).yDir = dir;
     end
+
+    % DMIG for Beam
+    fe.DMIGs = ads.fe.DMIG.FromBaffStations(stations,fe.Points);
 end
 
 end

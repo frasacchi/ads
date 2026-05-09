@@ -21,6 +21,11 @@ end
     println(fid,sprintf('FMETHOD = %.0f',obj.FlutterID));
     println(fid,sprintf('METHOD = %.0f',obj.EigR_ID));
     fprintf(fid,'SPC=%.0f\n',obj.SPC_ID);
+
+    if ~isempty(obj.K2GG)
+        fprintf(fid,'K2GG=%s\n',obj.K2GG);
+    end
+
     if ~isempty(obj.DispIDs)
         if any(isnan(obj.DispIDs))
             println(fid,'DISPLACEMENT(SORT1,REAL)= NONE');
@@ -46,6 +51,14 @@ end
     println(fid,'GROUNDCHECK=YES');
     println(fid,'AEROF=ALL');
     println(fid,'APRES=ALL');
+
+    % extra case control lines
+    if ~isempty(obj.ExtraCaseControl)
+        for i = 1:length(obj.ExtraCaseControl)
+            println(fid,obj.ExtraCaseControl(i));
+        end
+    end
+
     mni.printing.bdf.writeHeading(fid,'Begin Bulk')
     %% Bulk Data
     println(fid,'BEGIN BULK')
@@ -62,6 +75,10 @@ end
     mni.printing.cards.PARAM('AUNITS','r',0.1019716).writeToFile(fid);
     mni.printing.cards.MDLPRM('HDF5','i',0).writeToFile(fid);
 
+    if obj.setCoupledMass
+        mni.printing.cards.PARAM('COUPMASS','i',1).writeToFile(fid);
+    end
+
     %write Boundary Conditions
     mni.printing.bdf.writeComment(fid, 'SPCs')
     mni.printing.cards.SPCADD(obj.SPC_ID,obj.SPCs).writeToFile(fid);
@@ -69,12 +86,14 @@ end
     %create eigen solver and frequency bounds
     mni.printing.bdf.writeComment(fid,'Eigen Decomposition Method')
     mni.printing.bdf.writeColumnDelimiter(fid,'8');
-    mni.printing.cards.EIGR(obj.EigR_ID,'MGIV','F1',0,...
-         'F2',obj.FreqRange(2),'NORM','MAX')...
-         .writeToFile(fid);
-%     mni.printing.cards.EIGR(10,'MGIV','ND',42,'NORM','MAX')...
-%         .writeToFile(fid);
 
+    % mni.printing.cards.EIGR(obj.EigR_ID,'MGIV','F1',0,...
+    %      'F2',obj.FreqRange(2),'NORM','MAX')...
+    %      .writeToFile(fid);
+    mni.printing.cards.EIGRL(obj.EigR_ID, ...
+     'V2', obj.FreqRange(2), 'NORM', 'MAX') ...
+     .writeToFile(fid);
+     
     fclose(fid);
 end
 function println(fid,string)

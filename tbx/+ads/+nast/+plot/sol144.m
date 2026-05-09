@@ -2,7 +2,7 @@ function model = sol144(bin_folder)
 arguments
     bin_folder char
 end
-    model = mni.import_matran(fullfile(bin_folder,'Source','sol144.bdf'));
+    model = mni.import_matran(fullfile(bin_folder,'Source','sol144.bdf'),'ExpandInclude',true);
     model.draw;
     % hdf = mni.result.hdf5(fullfile(bin_folder,'bin','sol144.h5'));
 

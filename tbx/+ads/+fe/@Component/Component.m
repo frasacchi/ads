@@ -18,7 +18,7 @@ classdef Component < handle
         AeroSettings (:,1) ads.fe.AeroSettings = ads.fe.AeroSettings.empty;
         Shells (:,1) ads.fe.Shell = ads.fe.Shell.empty;
         RigidBodyElements (:,1) ads.fe.RigidBodyElement = ads.fe.RigidBodyElement.empty;
-
+        DMIGs (:,1) ads.fe.DMIG = ads.fe.DMIG.empty;
     end
     methods
         function m = GetMass(obj)

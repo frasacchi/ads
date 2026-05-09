@@ -6,11 +6,16 @@ arguments
     opts.trimObjs = [];
 end
     fid = fopen(filename,"w");
-    mni.printing.bdf.writeFileStamp(fid)
     %% Case Control Section
+    %new lines
+    % println(fid,'NASTRAN MEM=16GB');
+    % println(fid,'NASTRAN PARALLEL=1');
+
+    mni.printing.bdf.writeFileStamp(fid)
     mni.printing.bdf.writeComment(fid,'This file contain the main cards + case control for a 144 solution')
     mni.printing.bdf.writeHeading(fid,'Case Control');
     mni.printing.bdf.writeColumnDelimiter(fid,'8');
+
     println(fid,'NASTRAN NLINES=999999');
     if obj.OutputAeroMatrices
         println(fid,'ASSIGN output4=''../bin/AJJ.op4'',formatted,UNIT=11');
@@ -35,6 +40,15 @@ end
     println(fid,sprintf('TRIM = %.0f',obj.Trim_ID));
     println(fid,sprintf('METHOD = %.0f',obj.EigR_ID));
     fprintf(fid,'SPC=%.0f\n',obj.SPC_ID);
+
+    if ~isempty(obj.K2GG)
+        fprintf(fid,'K2GG=%s\n',obj.K2GG);
+    end
+
+    % if obj.isFree
+    % fprintf(fid,'SUPORT1=%.0f\n',obj.SUPORT1_ID);
+    % end
+
     fprintf(fid,'LOAD=%.0f\n',obj.Load_ID);
     println(fid,'MONITOR = ALL');
     println(fid,'SPCFORCES = ALL');
@@ -81,7 +95,6 @@ end
     mni.printing.cards.PARAM('OPPHIPA','i',1).writeToFile(fid);
     mni.printing.cards.PARAM('AUNITS','r',0.1019716).writeToFile(fid);
     mni.printing.cards.MDLPRM('HDF5','i',0).writeToFile(fid);
-    
     
     %create eigen solver and frequency bounds
     mni.printing.bdf.writeComment(fid,'Eigen Decomposition Method')

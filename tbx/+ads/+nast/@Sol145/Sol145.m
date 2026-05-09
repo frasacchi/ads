@@ -25,6 +25,8 @@ classdef Sol145 < handle
         FreqRange = [0.01,50];
         NFreq = 500;
         ModalDampingPercentage = 0;
+        ExtraCaseControl = [];
+        setCoupledMass = false;
 
         FlutterMethod = 'PK';
         FlutterID = 4;
@@ -42,6 +44,8 @@ classdef Sol145 < handle
         isFree = false; % if is Free a Boundary condition will be applied to  the Centre of Mass
         CoM = ads.fe.Constraint.empty;
         DoFs = []; 
+
+        K2GG = [];
     end    
     methods
         function ids = UpdateID(obj,ids)
@@ -64,6 +68,22 @@ classdef Sol145 < handle
             obj.DoFs = 35;
             obj.isFree = true;
         end
+
+        function set_trim_steadyLevel_opts(obj,V,rho,Mach,opts)
+            arguments
+                obj
+                V
+                rho
+                Mach
+                opts.DoFs = 3;
+            end
+            obj.isFree = true;
+            obj.V = V;
+            obj.rho = rho;
+            obj.Mach = Mach;
+            obj.DoFs = opts.DoFs;
+        end
+
         function set_trim_locked(obj,V,rho,Mach)
             obj.V = V;
             obj.rho = rho;

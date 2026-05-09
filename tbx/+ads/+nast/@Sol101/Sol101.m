@@ -27,6 +27,9 @@ classdef Sol101 < handle
 
         ExtraCards = mni.printing.cards.BaseCard.empty;
         ExtraCaseControl = [];
+        setCoupledMass = false;
+
+        K2GG = [];
 
     end
     

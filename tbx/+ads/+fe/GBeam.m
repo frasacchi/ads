@@ -1,14 +1,14 @@
-classdef Beam < ads.fe.Element
+classdef GBeam < ads.fe.Element
     %BEAM Summary of this class goes here
     %   Detailed explanation goes here
 
     properties
-        Stations (:,1) ads.fe.BeamStation
+        Stations (:,1) ads.fe.GBeamStation
         ID double = nan;
         PID double = nan;
         G0 ads.fe.Point = ads.fe.Point.empty
         yDir (3,1) double = [0;1;0];
-        K = 1; % 1 for Timoshenko, 0 for Euler-Bernoulli.
+        K = 1;
         ExportType string {mustBeMember(ExportType,{'CBAR','CBEAM'})} = "CBEAM";
         ExportLongFormat logical = true;
     end
@@ -57,14 +57,9 @@ classdef Beam < ads.fe.Element
                 st = [obj(i).Stations];
                 ps = [[st(1,:).Point],st(2,end).Point];
                 Xs = [ps.GlobalPos];
-                plt_obj(i) = plot3(Xs(1,:),Xs(2,:),Xs(3,:),'ko-');
-                plt_obj(i).MarkerFaceColor = [0.3,0.3,0.3];
-                if obj(i).K==1
-                    txt = "Timo Beam";
-                elseif obj(i).K==0
-                    txt = "Euler-B Beam";
-                end
-                plt_obj(i).Tag = txt;
+                plt_obj(i) = plot3(Xs(1,:),Xs(2,:),Xs(3,:),'co-');
+                plt_obj(i).MarkerFaceColor = 'c';
+                plt_obj(i).Tag = "G Beam";
             end
         end
         function Export(obj,fid)
@@ -75,8 +70,10 @@ classdef Beam < ads.fe.Element
                     if nnz(idx)>0
                         switch names(i)
                             case "CBEAM"
+                                % includes GENEL formulation
                                 obj(idx).ExportToCBEAM(fid);
                             case "CBAR"
+                                % includes GENEL formulation
                                 obj(idx).ExportToCBAR(fid);
                         end
                     end
@@ -116,7 +113,26 @@ classdef Beam < ads.fe.Element
                     tmpCard.writeToFile(fid);
                 end
 
-                % TODO DMIG Formulation
+                % print GENEL elements
+                mni.printing.bdf.writeComment(fid,"GENEL : Defines a general element.");
+                mni.printing.bdf.writeColumnDelimiter(fid,"long")
+                for i = 1:length(obj)
+                    % create matran sections
+                    Pa = obj(i).Stations(1).Point;
+                    Pb = obj(i).Stations(end).Point;
+
+                    % TODO - key formatting for GENEL required
+                    for j = 1:length(obj(i).Stations)
+                        matSecs(j) = obj(i).Stations(j).ToMatranSection(Pa,Pb);
+                    end
+
+                    % TODO - the ID needs to be different to the CBEAM
+
+                    %print GENEL cards
+                    tmpCard = mni.printing.cards.GENEL(obj(i).ID,obj(i).Stations(1).Mat.ID,matSecs,K=[1,1]*obj(i).K);
+                    tmpCard.LongFormat = obj.ExportLongFormat;
+                    tmpCard.writeToFile(fid);
+                end
             end
         end
         function ExportToCBAR(obj,fid)

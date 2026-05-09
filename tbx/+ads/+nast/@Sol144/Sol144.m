@@ -44,6 +44,7 @@ classdef Sol144 < handle
         SPC_ID = 3;
         Grav_ID = 4;
         Load_ID = 5;
+        SUPORT1_ID = 6;
         SPCs = [];
         ForceIDs = [];
         StressIDs = [];     % added to mirror the functionality of the sol146 class
@@ -56,6 +57,8 @@ classdef Sol144 < handle
         isFree = false; % if is Free a Boundary condition will be applied to  the Centre of Mass
         CoM = ads.fe.Constraint.empty;
         DoFs = [];
+
+        K2GG = [];
     end
     
     methods
@@ -93,6 +96,37 @@ classdef Sol144 < handle
             obj.Mach = Mach;
             obj.ANGLEA.Value = 0;
             obj.DoFs = [];
+        end
+        function set_trim_steadyLevel_opts(obj,V,rho,Mach,CoM,opts)
+            arguments
+                obj
+                V
+                rho
+                Mach
+                CoM ads.fe.Constraint
+                opts.DoFs = 35;
+                opts.URDD1 = 0;
+                opts.URDD2 = 0;
+                opts.URDD3 = 0;
+                opts.URDD4 = 0;
+                opts.URDD5 = 0;
+                opts.URDD6 = 0;
+                opts.ComponentNumbers = 0;
+            end
+            obj.isFree = true;
+            obj.CoM = CoM;
+            obj.CoM.ComponentNumbers = opts.ComponentNumbers;
+            obj.V = V;
+            obj.rho = rho;
+            obj.Mach = Mach;
+            obj.ANGLEA.Value = NaN;
+            obj.URDD1.Value = opts.URDD1;
+            obj.URDD2.Value = opts.URDD2;
+            obj.URDD3.Value = opts.URDD3;
+            obj.URDD4.Value = opts.URDD4;
+            obj.URDD5.Value = opts.URDD5;
+            obj.URDD6.Value = opts.URDD6;
+            obj.DoFs = opts.DoFs;
         end
         
         %% A method to write a .bat file to the same location as the main .bdf which will run the analysis and make NASTRAN 

@@ -4,11 +4,16 @@ arguments
     baffOpts ads.baff.BaffOpts = ads.baff.BaffOpts();
 end
 % generate underlying beam/shell FE
-%- TODO -- add shell implementation
+%- TODO -- clean up code! - fix aerosections
 if isa(obj.Stations,'baff.station.Beam')
     [fe,Etas] = beam2fe(obj,baffOpts);
+    SplineType = 4;
+elseif isa(obj.Stations,'baff.station.SuperBeam')
+    [fe,Etas] = beam2fe(obj,baffOpts);
+    SplineType = 4;
 elseif isa(obj.Stations,'baff.station.ShellStation.ShellStation')
     [fe,Etas] = shell2fe(obj,baffOpts);
+    SplineType = 1;
 end
 
 % return if no aero panels reqeuired
@@ -23,6 +28,9 @@ end
 % get interpolated AeroSections
 CS = fe.CoordSys(1);
 idx = find(Etas>=obj.AeroStations.Eta(1) & Etas<=obj.AeroStations.Eta(end));
+% [~,idxv] = sort(vecnorm([fe.Points.X]));
+% fe.Points = fe.Points(idxv);
+
 idxi = find([fe.Points.Tag] == "AttachmentNode");
 
 %% update eta list to include breaks for control surfaces
@@ -31,33 +39,86 @@ idxi = find([fe.Points.Tag] == "AttachmentNode");
 %     EtaControl = [EtaControl,(obj.ControlSurfaces(i).Etas)'];
 % end
 % Etas = unique([Etas,EtaControl]);
-%create Beam Nodes at each station
+
+    function flag = isWingtip(obj)
+        flag=true;
+        for c=1:length(obj.Children)
+            if isa(obj.Children(c), 'baff.Wing')
+                flag=false;
+                return
+            end
+            flag = isWingtip(obj.Children(c));
+
+        end
+    end
+
+isWingtipLogic = isWingtip(obj);
+
+% create Beam Nodes at each station
 % add LE and TE points
-function AddLeTe(obj,fe,Eta,Node)
-    X = obj.GetPos(Eta);
-    % add LE points
-    X_le = obj.AeroStations.GetPos(Eta,0);
-    fe.Points(end+1) = ads.fe.Point(X+X_le, InputCoordSys=CS,isAnchor=false,isAttachment=false);
-    fe.RigidBars(end+1) = ads.fe.RigidBar(Node,fe.Points(end));
-    % add TE points
-    X_te = obj.AeroStations.GetPos(Eta,1);
-    fe.Points(end+1) = ads.fe.Point(X+X_te, InputCoordSys=CS,isAnchor=false,isAttachment=false);
-    fe.RigidBars(end+1) = ads.fe.RigidBar(Node,fe.Points(end));
-end
+    function AddLeTe(obj,fe,Eta,Node,isWingtip)
+
+        [X,Dir] = obj.GetPos(Eta);
+        chordDir = cross(Dir, cross(Dir, [0,1,0]))';
+
+        % if dot(obj.A*chordDir, [1; 0; 0]) > 0
+        %      chordDir = -chordDir;
+        % end
+
+        X_le = obj.AeroStations.GetPos(Eta,0);
+        X_te = obj.AeroStations.GetPos(Eta,1);
+
+        Etai = norm(Dir(2:3)/norm(Dir)) * norm(X_te) / obj.EtaLength;
+        Xi_te = X+(Dir(1) / norm(Dir)) * norm(X_te)*chordDir/norm(chordDir);
+        Xi_le = X-(Dir(1) / norm(Dir)) * norm(X_le)*chordDir/norm(chordDir);
+
+        %temp fix -TODO
+        if Xi_te(2)>Xi_le(2)
+            Xi_te = X-(Dir(1) / norm(Dir)) * norm(X_te)*chordDir/norm(chordDir);
+            Xi_le = X+(Dir(1) / norm(Dir)) * norm(X_le)*chordDir/norm(chordDir);
+        end
+
+        if Eta<Etai || (Eta>(1-Etai) && ~isWingtip)
+             return
+        end
+
+        if Eta ==1 && isWingtip
+            Xi_le = X+X_le;
+            Xi_te = X+X_te;
+        end
+
+        % hold on
+        % plot(Xi_te(1),Xi_te(2),'ro')
+        % plot(Xi_le(1),Xi_le(2),'bo')
+        % plot(X(1),X(2),'ko')
+
+        % add LE points
+        % fe.Points(end+1) = ads.fe.Point(X+X_le, InputCoordSys=CS,isAnchor=false,isAttachment=false);
+        fe.Points(end+1) = ads.fe.Point(Xi_le, InputCoordSys=CS,isAnchor=false,isAttachment=false);
+        fe.Points(end).Tag = "AttachmentNode";
+        fe.RigidBars(end+1) = ads.fe.RigidBar(Node,fe.Points(end));
+        % add TE points
+        % fe.Points(end+1) = ads.fe.Point(X+X_te, InputCoordSys=CS,isAnchor=false,isAttachment=false);
+        fe.Points(end+1) = ads.fe.Point(Xi_te, InputCoordSys=CS,isAnchor=false,isAttachment=false);
+        fe.Points(end).Tag = "AttachmentNode";
+        fe.RigidBars(end+1) = ads.fe.RigidBar(Node,fe.Points(end));
+    end
 
 % check a point will be added at the left of the wing
 if abs(Etas(idx(1))-obj.AeroStations.Eta(1))>0.01
     [~,ii] = min(abs(Etas-obj.AeroStations.Eta(1)));
-    AddLeTe(obj,fe,obj.AeroStations.Eta(1),fe.Points(ii))
+    AddLeTe(obj,fe,obj.AeroStations.Eta(1),fe.Points(ii),isWingtipLogic)
 end
+
 % add block of nodes
 for i = 1:numel(idx)
-    AddLeTe(obj,fe,Etas(idx(i)),fe.Points(idxi(i)))
+    AddLeTe(obj,fe,Etas(idx(i)),fe.Points(idxi(i)),isWingtipLogic)
 end
+
 % check a point has been added at the left of the wing
 if abs(Etas(idx(end))-obj.AeroStations.Eta(end))>0.01
     [~,ii] = min(abs(Etas-obj.AeroStations.Eta(end)));
-    AddLeTe(obj,fe,obj.AeroStations.Eta(end),fe.Points(ii))
+    AddLeTe(obj,fe,obj.AeroStations.Eta(end),fe.Points(ii),isWingtipLogic)
 end
 
 %% update aerosurface list to include breaks for control surfaces
@@ -66,17 +127,24 @@ etas = unique([obj.AeroStations.Eta,reshape([obj.ControlSurfaces.Etas],1,[])]);
 st = obj.AeroStations.interpolate(etas);
 %% Add aero surfaces
 %create surfaces
+idxA = find([fe.Points.Tag] == "AttachmentNode");
 for i = 1:(st.N-1)
     sts = st.GetIndex(i:(i+1));
     Xs = [obj.GetPos(st.Eta(i)),obj.GetPos(st.Eta(i+1))];
     fe.AeroSurfaces(i) = ads.fe.AeroSurface(Xs,sts.BeamLoc,sts.Chord,StructuralPoints=fe.Points,...
         CoordSys=CS,Twists=sts.Twist);
     vecs = [st.GetPos(st.Eta(i),1)-st.GetPos(st.Eta(i),0), ...
-        st.GetPos(st.Eta(i+1),1)-st.GetPos(st.Eta(i+1),0)];
+        st.GetPos(st.Eta(i+1),1)-st.GetPos(st.Eta(i+1),0)];% 0 is TE, 1 is LE
     fe.AeroSurfaces(i).ChordVecs = vecs./repmat(vecnorm(vecs),3,1);
     fe.AeroSurfaces(i).CrossEta = 0.5;
     fe.AeroSurfaces(i).LiftCurveSlope = st.LiftCurveSlope(i);
+    fe.AeroSurfaces(i).SplineType = SplineType; %% quick edit
+    % TODO -NOT COMPLETE!
+    if SplineType==1
+        fe.AeroSurfaces(i).StructuralPoints = fe.Points(idxA);
+    end
 end
+
 %% add Secondary mass from Aerodyanmic stations
 stMass = obj.AeroStations.interpolate(linspace(etas(1),etas(end),baffOpts.SecondaryMassStation+1));
 for i = 1:(stMass.N-1)
@@ -92,13 +160,13 @@ for i = 1:(stMass.N-1)
         fe.RigidBars(end+1) = ads.fe.RigidBar(fe.Points(idx),fe.Points(end));
         % add mass at the point
         fe.Masses(end+1) = ads.fe.Mass(sti.LinearDensity.*dL,fe.Points(end),...
-        Ixx=sti.LinearInertia(1,1)*dL,Iyy=sti.LinearInertia(2,2)*dL,Izz=sti.LinearInertia(3,3)*dL,...
-        Ixy=sti.LinearInertia(1,2)*dL,Ixz=sti.LinearInertia(1,3)*dL,Iyz=sti.LinearInertia(2,3)*dL);
+            Ixx=sti.LinearInertia(1,1)*dL,Iyy=sti.LinearInertia(2,2)*dL,Izz=sti.LinearInertia(3,3)*dL,...
+            Ixy=sti.LinearInertia(1,2)*dL,Ixz=sti.LinearInertia(1,3)*dL,Iyz=sti.LinearInertia(2,3)*dL);
     end
 end
-%% add Aero Added Mass - for very specific aeroelastic analysis 
+%% add Aero Added Mass - for very specific aeroelastic analysis
 % aim to get 'wind off' modeshape to include the 'added mass'
-% likely very buggy - would need to isolate these mass for trim solutions etc... 
+% likely very buggy - would need to isolate these mass for trim solutions etc...
 stAddedMass = obj.AeroStations.interpolate(linspace(etas(1),etas(end),baffOpts.AddedMassStations+1));
 if baffOpts.IncludeAeroAddedMass
     for i = 1:(stAddedMass.N-1)
@@ -140,10 +208,10 @@ for i = 1:length(obj.ControlSurfaces)
         X_h1 = obj.AeroStations.GetPos(obj.ControlSurfaces(i).Etas(1),HingeEta);
         X_h2 = obj.AeroStations.GetPos(obj.ControlSurfaces(i).Etas(end),HingeEta);
 
-         % add second main wing point TE*
-         fe.Points(end+1) = ads.fe.Point(X2+X_h2, InputCoordSys=CS,isAnchor=false,isAttachment=false);
-         [~,idx] = min((Etas-obj.ControlSurfaces(i).Etas(2)).^2);
-         fe.RigidBars(end+1) = ads.fe.RigidBar(fe.Points(idx),fe.Points(end));
+        % add second main wing point TE*
+        fe.Points(end+1) = ads.fe.Point(X2+X_h2, InputCoordSys=CS,isAnchor=false,isAttachment=false);
+        [~,idx] = min((Etas-obj.ControlSurfaces(i).Etas(2)).^2);
+        fe.RigidBars(end+1) = ads.fe.RigidBar(fe.Points(idx),fe.Points(end));
 
         % add hinge coord system
         fe.CoordSys(end+1) = ads.fe.CoordSys(Origin=obj.A*(obj.Offset+X1+X_h1),A=obj.A);
@@ -166,12 +234,12 @@ for i = 1:length(obj.ControlSurfaces)
         fe.Points(end+1) = ads.fe.Point(X2+X_h2, InputCoordSys=CS,isAnchor=false,isAttachment=false);
         fe.RigidBars(end+1) = ads.fe.RigidBar(Ail_point,fe.Points(end));
         add_p =2;
-    
+
         %now add TE of control surface (only if they dont already exist...)
         if ~any(ismember(Etas,obj.ControlSurfaces(i).Etas(1)))
             fe.Points(end+1) = ads.fe.Point(X1+obj.AeroStations.GetPos(obj.ControlSurfaces(i).Etas(1),1), InputCoordSys=CS,isAnchor=false,isAttachment=false);
             fe.RigidBars(end+1) = ads.fe.RigidBar(Ail_point,fe.Points(end));
-             add_p = add_p + 1;
+            add_p = add_p + 1;
         end
         if ~any(ismember(Etas,obj.ControlSurfaces(i).Etas(2)))
             fe.Points(end+1) = ads.fe.Point(X2+obj.AeroStations.GetPos(obj.ControlSurfaces(i).Etas(2),1), InputCoordSys=CS,isAnchor=false,isAttachment=false);
@@ -218,3 +286,4 @@ if ~isempty(cs_idx)
     end
 end
 end
+

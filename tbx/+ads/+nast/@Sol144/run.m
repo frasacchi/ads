@@ -20,8 +20,10 @@ binFolder = ads.nast.create_tmp_bin('BinFolder',opts.BinFolder);
 %update boundary condition
 if ~isempty(obj.CoM) 
     if obj.isFree
-        obj.CoM.ComponentNumbers = ads.nast.inv_dof(obj.DoFs);
+        obj.CoM.ComponentNumbers = ads.nast.inv_dof(obj.DoFs,"con",obj.CoM.ComponentNumbers);
         obj.CoM.SupportNumbers = obj.DoFs;
+        % obj.CoM.Support1Numbers = obj.DoFs;
+        % obj.SUPORT1_ID = obj.CoM.ID;
     else
         obj.CoM.ComponentNumbers = 123456;
         obj.CoM.SupportNumbers = [];
@@ -48,13 +50,20 @@ if ~isempty(feModel.Constraints)
 else
     obj.SPCs = [];
 end
+
 %extract Forces
 obj.ForceIDs = [];
 if ~isempty(feModel.Forces)
-    obj.ForceIDs = [obj.ForceIDs,[feModel.Forces.ID]'];
+    obj.ForceIDs = [obj.ForceIDs;[feModel.Forces.ID]'];
 end
 if ~isempty(feModel.Moments)
-    obj.ForceIDs = [obj.ForceIDs,[feModel.Moments.ID]'];
+    obj.ForceIDs = [obj.ForceIDs;[feModel.Moments.ID]'];
+end
+%extract K2GG input matrices
+if ~isempty(feModel.DMIGs)
+    for i=1:numel(feModel.DMIGs)
+    obj.K2GG = feModel.DMIGs(i).Name;
+    end
 end
 %create main BDF file
 bdfFile = fullfile(pwd,binFolder,'Source','sol144.bdf');

@@ -42,6 +42,11 @@ elseif length(opts.NModes)==1
     opts.NModes = 1:opts.NModes;
 end
 M_idx = length(opts.NModes);
+
+if size(opts.Colors,1)<M_idx
+    opts.Colors = [opts.Colors;repmat(opts.Colors,(M_idx-size(opts.Colors(1,:),1)),1)];
+end
+
 for i = 1:M_idx
     mode_ind = [data.(opts.Mode)] == opts.NModes(i);
     mode_data = data(mode_ind);
@@ -62,4 +67,7 @@ for i = 1:M_idx
     end
     hold on
 end
+
+xlabel(string(opts.XAxis))
+ylabel(string(opts.YAxis))
 end

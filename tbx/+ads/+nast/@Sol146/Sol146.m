@@ -67,11 +67,26 @@ classdef Sol146 < handle
             obj.DoFs = 35;
             obj.Alt = alt;
         end
+        function set_trim_steadyLevel_opts(obj,V,rho,Mach,alt,opts)
+            arguments
+                obj
+                V
+                rho
+                Mach
+                alt
+                opts.DoFs = 3;
+            end
+            obj.isFree = true;
+            obj.V = V;
+            obj.rho = rho;
+            obj.Mach = Mach;
+            obj.DoFs = opts.DoFs;
+            obj.Alt = alt;
+        end
         function set_trim_locked(obj,V,rho,Mach)
             obj.V = V;
             obj.rho = rho;
             obj.Mach = Mach;
-%             obj.ANGLEA.Value = 0;
             obj.DoFs = [];
         end
         function obj = Sol146(CoM)

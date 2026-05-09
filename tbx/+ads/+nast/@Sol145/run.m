@@ -38,6 +38,12 @@ if ~isempty(feModel.Constraints)
 else
     obj.SPCs = [];
 end
+%extract K2GG input matrices
+if ~isempty(feModel.DMIGs)
+    for i=1:numel(feModel.DMIGs)
+    obj.K2GG = feModel.DMIGs(i).Name;
+    end
+end
 %create main BDF file
 bdfFile = fullfile(pwd,binFolder,'Source','sol145.bdf');
 obj.write_main_bdf(bdfFile,[modelFile,flutFile]);

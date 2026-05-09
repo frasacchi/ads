@@ -3,6 +3,7 @@ classdef Constraint < ads.fe.Element
         Point ads.fe.Point;
         ComponentNumbers double;
         SupportNumbers double = 0;
+        Support1Numbers double = 0;
         ID double = nan;
     end
     methods
@@ -47,6 +48,11 @@ classdef Constraint < ads.fe.Element
                     if ~isempty(obj(i).SupportNumbers) & obj(i).SupportNumbers ~= 0
                         tmpCard = mni.printing.cards.SUPORT(obj(i).Point.ID,...
                             obj(i).SupportNumbers);
+                        tmpCard.writeToFile(fid);
+                    end
+                    if ~isempty(obj(i).Support1Numbers) & obj(i).Support1Numbers ~= 0
+                        tmpCard = mni.printing.cards.SUPORT1(obj(i).ID,...
+                            obj(i).Point.ID,obj(i).Support1Numbers);
                         tmpCard.writeToFile(fid);
                     end
                 end

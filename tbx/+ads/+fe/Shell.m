@@ -52,10 +52,13 @@ classdef Shell < ads.fe.Element
                     plt_obj(i) = patch(Xs(1,:),Xs(2,:),Xs(3,:),'r');
                     plt_obj(i).EdgeColor = 'r';
                     plt_obj(i).FaceAlpha = 0.6;
-                    plt_obj(i).Tag = "CQUAD4(PCOMP)";
+                    plt_obj(i).Tag = "CQUAD4 (PCOMP)";
                 elseif obj(i).ExportType == "PSHELL"
-                    plt_obj(i) = plot3(Xs(1,:),Xs(2,:),Xs(3,:),'k');
-                    plt_obj(i).Tag = "CQUAD4(PSHELL)";
+                    % plt_obj(i) = plot3(Xs(1,:),Xs(2,:),Xs(3,:),'k');
+                    plt_obj(i) = patch(Xs(1,:),Xs(2,:),Xs(3,:),'y');
+                    plt_obj(i).EdgeColor = 'k';
+                    plt_obj(i).FaceAlpha = 0.6;
+                    plt_obj(i).Tag = "CQUAD4 (PSHELL)";
                 end
             end
         end

@@ -74,14 +74,18 @@ methods
             opts.alt = 15000 %altitude in feet
             opts.FreqRange = [0 50];
         end
-        % still to Complete - write gust as two TLOAD2 cards.... (see Ali's examples)
-        mni.printing.bdf.writeComment(fid,sprintf('Gust Subcase %.0f Properties',i))
+        % still to Complete - write gust as two TLOAD2 cards.... (see Ali's examples) -- TODO - check for second gust
+        mni.printing.bdf.writeComment(fid,sprintf('Gust Subcase %.0f Properties',idx))
         mni.printing.bdf.writeColumnDelimiter(fid,'8');
         % Gust Signal
         obj.set_params(V,'alt',opts.alt);
         mni.printing.cards.TLOAD2(obj.TLOAD_id,DAREA_id,'F',0,'T1',obj.Tdelay,'T2',obj.Tdelay+(1/obj.Freq)).writeToFile(fid);
         mni.printing.cards.TLOAD2(obj.TLOAD_id+1,DAREA_id,'F',obj.Freq,'T1',obj.Tdelay,'T2',obj.Tdelay+(1/obj.Freq)).writeToFile(fid);
-        mni.printing.cards.DLOAD(obj.DLOAD_id,1,[0.5,-0.5],[obj.TLOAD_id,obj.TLOAD_id+1]).writeToFile(fid);
+
+        % mni.printing.cards.TLOAD2(obj.TLOAD_id+2,DAREA_id,'F',obj.Freq,'T1',obj.Tdelay+(1/obj.Freq)*6,'T2',obj.Tdelay+(1/obj.Freq)*7).writeToFile(fid);
+        % mni.printing.cards.TLOAD2(obj.TLOAD_id+3,DAREA_id,'F',0,'T1',obj.Tdelay+(1/obj.Freq)*6,'T2',obj.Tdelay+(1/obj.Freq)*7).writeToFile(fid);
+
+        mni.printing.cards.DLOAD(obj.DLOAD_id,0.5,[1,-1],[obj.TLOAD_id,obj.TLOAD_id+1]).writeToFile(fid);
         mni.printing.cards.GUST(obj.GUST_id,obj.DLOAD_id,obj.Amplitude/V,0,V).writeToFile(fid);
     end
 end
