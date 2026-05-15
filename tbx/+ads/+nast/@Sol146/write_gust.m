@@ -54,7 +54,10 @@ function write_gust(obj,gustFile)
     mni.printing.bdf.writeColumnDelimiter(fid,'8');
     mni.printing.cards.DAREA(obj.DAREA_ID+1,obj.EPoint_ID,0,1).writeToFile(fid);
     mni.printing.cards.EPOINT(obj.EPoint_ID).writeToFile(fid);
-    mni.printing.cards.DMIG('STIFF',6,1,obj.EPoint_ID,0,obj.EPoint_ID,0,1,nan,TOUT=0).writeToFile(fid);
+
+    GJ.ID = obj.EPoint_ID;
+    % mni.printing.cards.DMIG('STIFF',6,1,obj.EPoint_ID,0,obj.EPoint_ID,0,1,nan,TOUT=0).writeToFile(fid); %TODO DMIG CHANGED!
+    mni.printing.cards.DMIG('STIFF',6,1,GJ,0,{GJ},{0},{1},{nan},TOUT=0).writeToFile(fid); %TODO DMIG CHANGED!
     %% Gust Case Properties Section
     for i = 1:length(obj.Gusts)
         if isa(obj.Gusts(i),'ads.nast.gust.OneMC')

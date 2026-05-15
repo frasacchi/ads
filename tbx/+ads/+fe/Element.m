@@ -5,6 +5,7 @@ classdef Element < matlab.mixin.Heterogeneous & handle
     properties
         Name = "";
         Tag = "";
+        Note = "";
     end
     
     methods

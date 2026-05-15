@@ -1,7 +1,8 @@
-function [fe,Etas] = shell2fe(obj,baffOpts)
+function [fe,Etas] = shell2fe(obj,baffOpts,opts)
 arguments
     obj
     baffOpts = ads.baff.BaffOpts();
+    opts.PointName string = ""
 end
 %SHELL2FE baff shell to fe component
 %   Detailed explanation goes here
@@ -48,7 +49,10 @@ nodesi = obj.GetPos(REtas);
 % generate attachement nodes
 for i = 1:length(REtas)
     fe.Points(end+1) = ads.fe.Point(nodesi(:,i),InputCoordSys=CS,isAttachment=true); % TODO Check isAttachment?
-    fe.Points(end).Tag = "AttachmentNode";
+    fe.Points(end).Note = "AttachmentNode";
+    if strlength(opts.PointName) > 0
+        fe.Points(end).Name = opts.PointName + "_N" + i;
+    end
     % idx = find(abs(nodesX(1,:) - nodesi(1,i)) < 1e-8);
     flat = Rnodes(1+(i-1)*N:i*N,:);
     idx = unique(flat(:)');
@@ -64,7 +68,10 @@ if ~isempty(obj.Stations.ConstrainedNodes)
     for j = 1:length(obj.Stations.ConstrainedEta)
     nodeCon = obj.GetPos(obj.Stations.ConstrainedEta(j));
     fe.Points(end+1) = ads.fe.Point(nodeCon,InputCoordSys=CS,isAttachment=true);
-    fe.Points(end).Tag = "AttachmentNode";
+    fe.Points(end).Note = "AttachmentNode";
+    if strlength(opts.PointName) > 0
+        fe.Points(end).Name = opts.PointName + "_C" + j;
+    end
     for i=1:length(obj.Stations.ConstrainedNodes(:,j))
         fe.RigidBars(end+1) = ads.fe.RigidBar(fe.Points(end),fe.Points(obj.Stations.ConstrainedNodes(i,j)));
     end
