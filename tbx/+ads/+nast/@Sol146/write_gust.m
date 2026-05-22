@@ -42,9 +42,10 @@ function write_gust(obj,gustFile)
         Df = obj.GustFreq - obj.FreqRange(1);
     end
 
-    mni.printing.cards.FREQ1(obj.FREQ_ID,obj.FreqRange(1),Df/(obj.NFreq-1),(obj.NFreq-1)).writeToFile(fid);
+    mni.printing.cards.FREQ1(obj.FREQ_ID,obj.FreqRange(1),Df/(obj.NFreq),(obj.NFreq)).writeToFile(fid);
     mni.printing.cards.FREQ(obj.FREQ_ID,0.001).writeToFile(fid);
     mni.printing.cards.TSTEP(obj.TSTEP_ID,ceil(obj.GustDuration/obj.GustTstep),obj.GustTstep).writeToFile(fid);
+    
     %DAREA for 1MC
     mni.printing.bdf.writeComment(fid,'DAREA Card for one-minus-cosine excitation')
     mni.printing.bdf.writeColumnDelimiter(fid,'8');
@@ -61,9 +62,11 @@ function write_gust(obj,gustFile)
     %% Gust Case Properties Section
     for i = 1:length(obj.Gusts)
         if isa(obj.Gusts(i),'ads.nast.gust.OneMC')
-            obj.Gusts(i).write_bdf(fid,obj.DAREA_ID,obj.V,i,alt=obj.Alt,FreqRange=obj.FreqRange);  
+            obj.Gusts(i).write_bdf(fid,obj.DAREA_ID,obj.V,i,alt=obj.Alt,FreqRange=obj.FreqRange,GustDuration=obj.GustDuration);  
+        elseif isa(obj.Gusts(i),'ads.nast.gust.OneMC_wt')
+                obj.Gusts(i).write_bdf(fid,obj.DAREA_ID,obj.V,i,alt=obj.Alt,FreqRange=obj.FreqRange,GustDuration=obj.GustDuration);      
         elseif isa(obj.Gusts(i),'ads.nast.gust.Turb')
-            obj.Gusts(i).write_bdf(fid,obj.DAREA_ID+1,obj.V,i,alt=obj.Alt,FreqRange=obj.FreqRange);  
+            obj.Gusts(i).write_bdf(fid,obj.DAREA_ID+1,obj.V,i,alt=obj.Alt,FreqRange=obj.FreqRange); 
         end
     end
     fclose(fid);
