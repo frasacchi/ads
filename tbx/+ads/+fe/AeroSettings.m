@@ -3,6 +3,8 @@ classdef AeroSettings < ads.fe.Element
     %   Detailed explanation goes here
 
     properties
+        % Aerodynamic Coordinate System. Must be a rectangular coordinate system.
+        % Flow is defined in the positive x-direction in this system.
         ACSID (1,1) ads.fe.AbsCoordSys = ads.fe.BaseCoordSys.get; 
         RCSID (1,1) ads.fe.AbsCoordSys = ads.fe.BaseCoordSys.get; 
         Velocity double
@@ -40,6 +42,26 @@ classdef AeroSettings < ads.fe.Element
         end
         function ids = UpdateID(obj,ids)
         end
+
+        function plt_obj = drawElement(obj)
+            if isempty(obj)
+                plt_obj = [];
+                return;
+            end
+            for i = 1:length(obj)
+                origin = obj(i).ACSID.getPointGlobal([0; 0; 0]);
+                scale = obj(i).RefB * 0.1;
+                if isempty(scale) || isnan(scale) || scale == 0
+                    scale = 1;
+                end
+                dest = obj(i).ACSID.getPointGlobal([scale; 0; 0]);
+                v = dest - origin;
+                plt_obj(i) = quiver3(origin(1), origin(2), origin(3), ...
+                    v(1), v(2), v(3), 0, 'Color', 'r', 'LineWidth', 2, ...
+                    'MaxHeadSize', 1, 'Tag', 'Aero Velocity');
+            end
+        end
+
         function Export(obj,fid)
             if ~isempty(obj)
                 mni.printing.bdf.writeComment(fid,"AERO & AEROS : Defines Aero Properties");
@@ -72,4 +94,3 @@ classdef AeroSettings < ads.fe.Element
         end
     end
 end
-

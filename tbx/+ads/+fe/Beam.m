@@ -8,7 +8,7 @@ classdef Beam < ads.fe.Element
         PID double = nan;
         G0 ads.fe.Point = ads.fe.Point.empty
         yDir (3,1) double = [0;1;0];
-        K = 1;
+        K = 1; % 1 for Timoshenko, 0 for Euler-Bernoulli.
         ExportType string {mustBeMember(ExportType,{'CBAR','CBEAM'})} = "CBEAM";
         ExportLongFormat logical = true;
     end
@@ -57,9 +57,14 @@ classdef Beam < ads.fe.Element
                 st = [obj(i).Stations];
                 ps = [[st(1,:).Point],st(2,end).Point];
                 Xs = [ps.GlobalPos];
-                plt_obj(i) = plot3(Xs(1,:),Xs(2,:),Xs(3,:),'co-');
-                plt_obj(i).MarkerFaceColor = 'c';
-                plt_obj(i).Tag = "Beam";
+                plt_obj(i) = plot3(Xs(1,:),Xs(2,:),Xs(3,:),'ko-');
+                plt_obj(i).MarkerFaceColor = [0.3,0.3,0.3];
+                if obj(i).K==1
+                    txt = "Timo Beam";
+                elseif obj(i).K==0
+                    txt = "Euler-B Beam";
+                end
+                plt_obj(i).Tag = txt;
             end
         end
         function Export(obj,fid)
@@ -110,6 +115,8 @@ classdef Beam < ads.fe.Element
                     tmpCard.LongFormat = obj.ExportLongFormat;
                     tmpCard.writeToFile(fid);
                 end
+
+                % TODO DMIG Formulation
             end
         end
         function ExportToCBAR(obj,fid)

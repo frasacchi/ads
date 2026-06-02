@@ -35,21 +35,21 @@ if ~opts.CollectOnly
     flutFile = string(fullfile(pwd,binFolder,'Source','flutter.bdf'));
     obj.write_flutter(flutFile);
 
-    % extract SPC IDs
-    if ~isempty(feModel.Constraints)
-        obj.SPCs = [feModel.Constraints.ID];
-    else
-        obj.SPCs = [];
+% extract SPC IDs
+if ~isempty(feModel.Constraints)
+    obj.SPCs = [feModel.Constraints.ID];
+else
+    obj.SPCs = [];
+end
+%extract K2GG input matrices
+if ~isempty(feModel.DMIGs)
+    for i=1:numel(feModel.DMIGs)
+    obj.K2GG = feModel.DMIGs(i).Name;
     end
-    %extract K2GG input matrices
-    if ~isempty(feModel.DMIGs)
-        for i=1:numel(feModel.DMIGs)
-        obj.K2GG = feModel.DMIGs(i).Name;
-        end
-    end
-    %create main BDF file
-    bdfFile = fullfile(pwd,binFolder,'Source','sol145.bdf');
-    obj.write_main_bdf(bdfFile,[modelFile,flutFile]);
+end
+%create main BDF file
+bdfFile = fullfile(pwd,binFolder,'Source','sol145.bdf');
+obj.write_main_bdf(bdfFile,[modelFile,flutFile]);
 
     %% Run Analysis
     if opts.Async

@@ -1,6 +1,8 @@
 classdef AeroSurface < ads.fe.Element
     %MASS Summary of this class goes here
     %   Detailed explanation goes here
+
+    % --TODO- check correction factor + add camber formulation!
     
     properties
         CoordSys (1,1) ads.fe.AbsCoordSys = ads.fe.BaseCoordSys.get;
@@ -189,12 +191,21 @@ classdef AeroSurface < ads.fe.Element
             for i = 1:length(obj)
                 xDirGlobal = obj(i).AeroCoordSys.getAglobal()*[1;0;0];
                 xDirLocal = obj(i).CoordSys.getAglobal()'*xDirGlobal;
-                P1 = obj(i).Points(:,1) + obj(i).ChordVecs(:,1)*obj(i).Chords(1).*(obj(i).CrossEta-obj(i).ChordwisePos(1));
-                P2 = obj(i).Points(:,2) + obj(i).ChordVecs(:,2)*obj(i).Chords(2).*(obj(i).CrossEta-obj(i).ChordwisePos(2));
+                % P1 = obj(i).Points(:,1) + obj(i).ChordVecs(:,1)*obj(i).Chords(1).*(obj(i).CrossEta-obj(i).ChordwisePos(1));
+                % P2 = obj(i).Points(:,2) + obj(i).ChordVecs(:,2)*obj(i).Chords(2).*(obj(i).CrossEta-obj(i).ChordwisePos(2));
+                P1 = obj(i).Points(:,1) + xDirLocal*obj(i).Chords(1).*(obj(i).CrossEta-obj(i).ChordwisePos(1));
+                P2 = obj(i).Points(:,2) + xDirLocal*obj(i).Chords(2).*(obj(i).CrossEta-obj(i).ChordwisePos(2));
+
                 X1 = P1 - obj(i).Chords(1)*xDirLocal*obj(i).CrossEta;
                 X4 = P2 - obj(i).Chords(2)*xDirLocal*obj(i).CrossEta;
                 X2 = X1 + obj(i).Chords(1)*xDirLocal;
                 X3 = X4 + obj(i).Chords(2)*xDirLocal;
+
+                % X1 = P1 - obj(i).Chords(1)*obj(i).ChordVecs(:,1)*obj(i).CrossEta;
+                % X4 = P2 - obj(i).Chords(2)*obj(i).ChordVecs(:,2)*obj(i).CrossEta;
+                % X2 = X1 + obj(i).Chords(1)*obj(i).ChordVecs(:,1);
+                % X3 = X4 + obj(i).Chords(2)*obj(i).ChordVecs(:,2);
+
                 V12 = X2-X1;
                 V43 = X3-X4;
                 V14 = X4-X1;
@@ -317,6 +328,12 @@ classdef AeroSurface < ads.fe.Element
                             usage = 'BOTH';
                         end
                         switch obj(i).SplineType
+                            case 1
+                                mni.printing.bdf.writeColumnDelimiter(fid,"short")
+                                id = obj(i).ID + (obj(i).nSpan*obj(i).nChord);
+                                mni.printing.cards.SPLINE1(id,obj(i).ID,obj(i).ID,id-1,obj(i).SID(2),USAGE=usage).writeToFile(fid);
+                                mni.printing.cards.SET1(obj(i).SID(2),[obj(i).StructuralPoints.ID]).writeToFile(fid);
+                                % TODO - add control surface handling
                             case 4
                                 mni.printing.bdf.writeColumnDelimiter(fid,"short")
                                 id = obj(i).ID + (obj(i).nSpan*obj(i).nChord);
@@ -342,17 +359,18 @@ classdef AeroSurface < ads.fe.Element
                                 end
                                 if splitMesh
                                     mni.printing.cards.SPLINE4(id+1,obj(i).ID,obj(i).SID(1),obj(i).SID(5),USAGE='DISP',METH=obj(i).SplineMeth,FTYPE='WF2',RCORE=0.5).writeToFile(fid);
-                                    mni.printing.cards.SET1(obj(i).SID(3),[obj(i).DisplacementPoints.ID]).writeToFile(fid);
+                                    mni.printing.cards.SET1(obj(i).SID(3),unique([obj(i).DisplacementPoints.ID])).writeToFile(fid);
                                 end
                             case 6
                                 mni.printing.bdf.writeColumnDelimiter(fid,"short")
                                 id = obj(i).ID + (obj(i).nSpan*obj(i).nChord);
-                                mni.printing.cards.SPLINE4(id,obj(i).ID,obj(i).SID(1),obj(i).SID(2),USAGE=usage).writeToFile(fid);
+                                % mni.printing.cards.SPLINE4(id,obj(i).ID,obj(i).SID(1),obj(i).SID(2),USAGE=usage).writeToFile(fid);
+                                mni.printing.cards.SPLINE6(id,obj(i).ID,obj(i).SID(1),obj(i).SID(2),USAGE=usage).writeToFile(fid);
                                 mni.printing.cards.AELIST(obj(i).SID(1),obj(i).ID:(id-1)).writeToFile(fid);
                                 mni.printing.cards.SET1(obj(i).SID(2),[obj(i).StructuralPoints.ID]).writeToFile(fid);
                                 if splitMesh
                                     mni.printing.cards.SPLINE6(id+1,obj(i).ID,obj(i).SID(1),obj(i).SID(3),USAGE='DISP').writeToFile(fid);
-                                    mni.printing.cards.SET1(obj(i).SID(3),[obj(i).DisplacementPoints.ID]).writeToFile(fid);
+                                    mni.printing.cards.SET1(obj(i).SID(3),unique([obj(i).DisplacementPoints.ID])).writeToFile(fid);
                                 end
                             case 7
                                 mni.printing.bdf.writeColumnDelimiter(fid,"short")
@@ -362,7 +380,7 @@ classdef AeroSurface < ads.fe.Element
                                 mni.printing.cards.SET1(obj(i).SID(2),[obj(i).StructuralPoints.ID]).writeToFile(fid);
                                 if splitMesh
                                     mni.printing.cards.SPLINE7(id+1,obj(i).ID,obj(i).SID(1),obj(i).SID(3),obj(i).CoordSys.ID,USAGE='DISP',DTOR=0.1).writeToFile(fid);
-                                    mni.printing.cards.SET1(obj(i).SID(3),[obj(i).DisplacementPoints.ID]).writeToFile(fid);
+                                    mni.printing.cards.SET1(obj(i).SID(3),unique([obj(i).DisplacementPoints.ID])).writeToFile(fid);
                                 end
                             otherwise
                                 error('Unkown Spline Type %.0f',obj(i).SplineType)

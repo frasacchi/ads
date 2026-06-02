@@ -30,7 +30,7 @@ classdef RigidBar < ads.fe.Element
             for i = 1:length(obj)
                 Xs = [obj(i).Point1.GlobalPos,obj(i).Point2.GlobalPos];
                 plt_obj(i) = plot3(Xs(1,:),Xs(2,:),Xs(3,:),'m-');
-                plt_obj(i).Tag = "RBE";
+                plt_obj(i).Tag = "RBE2";
             end
         end
         function Export(obj,fid)

@@ -13,6 +13,10 @@ classdef Sol101 < ads.nast.BaseSol
         % CoM Info for Boundary Constraints
         ExtraCards = mni.printing.cards.BaseCard.empty;
         ExtraCaseControl = [];
+        setCoupledMass = false;
+
+        K2GG = [];
+
     end
     
     methods

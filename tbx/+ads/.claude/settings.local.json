@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd /c/Users/vm19436/Documents/gitDev/ads/tbx/+ads/+nast && ls -la @Sol*/)",
+      "Read(//c/c/Users/vm19436/Documents/gitDev/ads/tbx/+ads/**)",
+      "Bash(git -C \"c:\\\\Users\\\\vm19436\\\\Documents\\\\gitDev\\\\ads\" rev-parse --show-toplevel)",
+      "Bash(Get-Content \"c:\\\\Users\\\\vm19436\\\\Documents\\\\gitDev\\\\ads\\\\version.txt\" -ErrorAction SilentlyContinue)",
+      "Bash(Get-Content \"c:\\\\Users\\\\vm19436\\\\Documents\\\\gitDev\\\\ads\\\\tbx\\\\+ads\\\\+fe\\\\IDs.m\" -Head 20 -ErrorAction SilentlyContinue)",
+      "Bash(find \"c:\\\\Users\\\\vm19436\\\\Documents\\\\gitDev\" -type d -name \"*baff*\" -o -type d -name \"*BAFF*\" 2>/dev/null | head -10)",
+      "Read(//c/Users/vm19436/Documents/gitDev/**)"
+    ]
+  }
+}

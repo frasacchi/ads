@@ -1,4 +1,4 @@
-classdef OneMC < ads.nast.gust.BaseSettings
+classdef OneMC_wt < ads.nast.gust.BaseSettings
 
 properties
     Amplitude = [];
@@ -14,7 +14,7 @@ properties
     Tdelay = 0;
 end
 methods
-    function obj = OneMC(GustAmplitude,GustLength,GustFreq,GustType)
+    function obj = OneMC_wt(GustAmplitude,GustLength,GustFreq,GustType)
         arguments
             GustAmplitude double
             GustLength double
@@ -53,8 +53,8 @@ methods
                 alt = min(max(opts.alt,15000),50000);
                 w_ref_eas = interp1([0,15e3,60e3],[17.07,13.41,6.36],alt);
                 % convert EAS to TAS
-                [rho_0,~,~,~,~,~,~] = dcrg.aero.atmos(0);
-                [rho,~,~,~,~,~,~] = dcrg.aero.atmos(alt./SI.ft);
+                [rho_0,~,~,~,~,~,~] = ads.util.atmos(0);
+                [rho,~,~,~,~,~,~] = ads.util.atmos(convlength(alt,'ft','m'));
                 w_ref_tas = w_ref_eas.*sqrt(rho_0./rho);
                 % calc amplitude
                 obj.Amplitude = w_ref_tas*(0.5*obj.Length/107).^(1/6);
@@ -85,15 +85,13 @@ methods
         mni.printing.cards.TLOAD2(obj.TLOAD_id,DAREA_id,'F',0,'T1',obj.Tdelay,'T2',obj.Tdelay+(1/obj.Freq)).writeToFile(fid);
         mni.printing.cards.TLOAD2(obj.TLOAD_id+1,DAREA_id,'F',obj.Freq,'T1',obj.Tdelay,'T2',obj.Tdelay+(1/obj.Freq)).writeToFile(fid);
         % correcting gusts
-        mni.printing.cards.TLOAD2(obj.TLOAD_id+2,DAREA_id,'F',0,'T1',opts.GustDuration,'T2',opts.GustDuration+(1/obj.Freq)).writeToFile(fid);
-        mni.printing.cards.TLOAD2(obj.TLOAD_id+3,DAREA_id,'F',obj.Freq,'T1',opts.GustDuration,'T2',opts.GustDuration+(1/obj.Freq)).writeToFile(fid);
-        mni.printing.cards.TLOAD2(obj.TLOAD_id+4,DAREA_id,'F',0,'T1',opts.GustDuration*2,'T2',opts.GustDuration*2+(1/obj.Freq)).writeToFile(fid);
-        mni.printing.cards.TLOAD2(obj.TLOAD_id+5,DAREA_id,'F',obj.Freq,'T1',opts.GustDuration*2,'T2',opts.GustDuration*2+(1/obj.Freq)).writeToFile(fid);
+        % mni.printing.cards.TLOAD2(obj.TLOAD_id+2,DAREA_id,'F',0,'T1',opts.GustDuration*2,'T2',opts.GustDuration*2+(1/obj.Freq)).writeToFile(fid);
+        % mni.printing.cards.TLOAD2(obj.TLOAD_id+3,DAREA_id,'F',obj.Freq,'T1',opts.GustDuration*2,'T2',opts.GustDuration*2+(1/obj.Freq)).writeToFile(fid);
+        % mni.printing.cards.TLOAD2(obj.TLOAD_id+4,DAREA_id,'F',0,'T1',opts.GustDuration*3,'T2',opts.GustDuration*3+(1/obj.Freq)).writeToFile(fid);
+        % mni.printing.cards.TLOAD2(obj.TLOAD_id+5,DAREA_id,'F',obj.Freq,'T1',opts.GustDuration*3,'T2',opts.GustDuration*3+(1/obj.Freq)).writeToFile(fid);
 
-        mni.printing.cards.DLOAD(obj.DLOAD_id,0.5,[1,-1,-2,2,1,-1],...
-                                                  [obj.TLOAD_id,obj.TLOAD_id+1,...
-                                                  obj.TLOAD_id+2,obj.TLOAD_id+3,...
-                                                  obj.TLOAD_id+4,obj.TLOAD_id+5]).writeToFile(fid);
+        mni.printing.cards.DLOAD(obj.DLOAD_id,0.5,[1,-1],...
+                                                  [obj.TLOAD_id,obj.TLOAD_id+1]).writeToFile(fid);
         mni.printing.cards.GUST(obj.GUST_id,obj.DLOAD_id,obj.Amplitude/V,0,V).writeToFile(fid);
     end
 end

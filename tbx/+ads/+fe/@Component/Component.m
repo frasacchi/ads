@@ -18,7 +18,7 @@ classdef Component < handle
         AeroSettings (:,1) ads.fe.AeroSettings = ads.fe.AeroSettings.empty;
         Shells (:,1) ads.fe.Shell = ads.fe.Shell.empty;
         RigidBodyElements (:,1) ads.fe.RigidBodyElement = ads.fe.RigidBodyElement.empty;
-
+        DMIGs (:,1) ads.fe.DMIG = ads.fe.DMIG.empty;
     end
     methods
         function m = GetMass(obj)
@@ -53,9 +53,12 @@ classdef Component < handle
             zlabel('Z');
             %draw the elements
             plt_obj = obj.drawElement();
+
+            valid_plots = plt_obj(isgraphics(plt_obj));
+
             % make the legend
-            [names,idx] = unique(arrayfun(@(x)string(x.Tag),plt_obj));
-            lg = legend(plt_obj(idx),names,'ItemHitFcn', @baff.util.plotting.cbToggleVisible);
+            [names,idx] = unique(arrayfun(@(x)string(x.Tag),valid_plots));
+            lg = legend(plt_obj(idx),names,'ItemHitFcn', @ads.util.plotting.cbToggleVisible);
         end
         function plt_obj = drawElement(obj)
             plt_obj = [];

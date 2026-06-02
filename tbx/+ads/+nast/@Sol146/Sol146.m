@@ -56,11 +56,26 @@ classdef Sol146 < ads.nast.BaseSol
             obj.DoFs = 35;
             obj.Alt = alt;
         end
+        function set_trim_steadyLevel_opts(obj,V,rho,Mach,alt,opts)
+            arguments
+                obj
+                V
+                rho
+                Mach
+                alt
+                opts.DoFs = 3;
+            end
+            obj.isFree = true;
+            obj.V = V;
+            obj.rho = rho;
+            obj.Mach = Mach;
+            obj.DoFs = opts.DoFs;
+            obj.Alt = alt;
+        end
         function set_trim_locked(obj,V,rho,Mach)
             obj.V = V;
             obj.rho = rho;
             obj.Mach = Mach;
-%             obj.ANGLEA.Value = 0;
             obj.DoFs = [];
         end
         function obj = Sol146(CoM)
@@ -69,11 +84,11 @@ classdef Sol146 < ads.nast.BaseSol
         function ids = UpdateID(obj,ids)
                 obj.SDAMP_ID = ids.SID;
                 obj.FREQ_ID = ids.SID + 1;
-                obj.TSTEP_ID = ids.SID + 2;
-                obj.EigR_ID = ids.SID + 3;
-                obj.SPC_ID = ids.SID + 4;
-                obj.DAREA_ID = ids.SID + 5;
-                ids.SID = ids.SID + 7; % skip one for DAREA fun...
+                obj.TSTEP_ID = ids.SID + 5;
+                obj.EigR_ID = ids.SID + 6;
+                obj.SPC_ID = ids.SID + 7;
+                obj.DAREA_ID = ids.SID + 8;
+                ids.SID = ids.SID + 10; % skip one for DAREA fun...
 
                 obj.EPoint_ID = ids.ExtremeID;
                 ids.ExtremeID = ids.ExtremeID - 1;

@@ -4,13 +4,14 @@ arguments
     f = figure()
     plotOpts = mni.bulk.PlotOpts();
 end
-    model = mni.import_matran(fullfile(bin_folder,'Source','sol144.bdf'));
-    model.draw(f,plotOpts);
-    
-    hdf = mni.result.hdf5(fullfile(bin_folder,'bin','sol144.h5'));
-    res_disp =  hdf.read_displacements;
-    res_aeroP = hdf.read_aero_pressure;
-    res_aeroF = hdf.read_aero_force;
+    model = mni.import_matran(fullfile(bin_folder,'Source','sol144.bdf'),'ExpandInclude',true);
+    model.draw;
+    % hdf = mni.result.hdf5(fullfile(bin_folder,'bin','sol144.h5'));
+
+    f06 =  mni.result.f06(fullfile(bin_folder,'bin','sol144.f06'));
+    res_disp =  f06.read_disp;
+    res_aeroP = f06.read_aeroP;
+    res_aeroF = f06.read_aeroF;
 
     % apply deformation result
     [~,i] = ismember(model.GRID.GID,res_disp.GID);

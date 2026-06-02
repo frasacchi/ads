@@ -37,9 +37,10 @@ function write_gust(obj,fid)
         Df = obj.GustFreq - obj.FreqRange(1);
     end
 
-    mni.printing.cards.FREQ1(obj.FREQ_ID,obj.FreqRange(1),Df/(obj.NFreq-1),(obj.NFreq-1)).writeToFile(fid);
+    mni.printing.cards.FREQ1(obj.FREQ_ID,obj.FreqRange(1),Df/(obj.NFreq),(obj.NFreq)).writeToFile(fid);
     mni.printing.cards.FREQ(obj.FREQ_ID,0.001).writeToFile(fid);
     mni.printing.cards.TSTEP(obj.TSTEP_ID,ceil(obj.GustDuration/obj.GustTstep),obj.GustTstep).writeToFile(fid);
+    
     %DAREA for 1MC
     mni.printing.bdf.writeComment(fid,'DAREA Card for one-minus-cosine excitation')
     mni.printing.bdf.writeColumnDelimiter(fid,'8');
@@ -49,13 +50,18 @@ function write_gust(obj,fid)
     mni.printing.bdf.writeColumnDelimiter(fid,'8');
     mni.printing.cards.DAREA(obj.DAREA_ID+1,obj.EPoint_ID,0,1).writeToFile(fid);
     mni.printing.cards.EPOINT(obj.EPoint_ID).writeToFile(fid);
-    mni.printing.cards.DMIG('STIFF',6,1,obj.EPoint_ID,0,obj.EPoint_ID,0,1,nan,TOUT=0).writeToFile(fid);
+
+    GJ.ID = obj.EPoint_ID;
+    % mni.printing.cards.DMIG('STIFF',6,1,obj.EPoint_ID,0,obj.EPoint_ID,0,1,nan,TOUT=0).writeToFile(fid); %TODO DMIG CHANGED!
+    mni.printing.cards.DMIG('STIFF',6,1,GJ,0,{GJ},{0},{1},{nan},TOUT=0).writeToFile(fid); %TODO DMIG CHANGED!
     %% Gust Case Properties Section
     for i = 1:length(obj.Gusts)
         if isa(obj.Gusts(i),'ads.nast.gust.OneMC')
-            obj.Gusts(i).write_bdf(fid,obj.DAREA_ID,obj.V,i,alt=obj.Alt,FreqRange=obj.FreqRange);  
+            obj.Gusts(i).write_bdf(fid,obj.DAREA_ID,obj.V,i,alt=obj.Alt,FreqRange=obj.FreqRange,GustDuration=obj.GustDuration);  
+        elseif isa(obj.Gusts(i),'ads.nast.gust.OneMC_wt')
+                obj.Gusts(i).write_bdf(fid,obj.DAREA_ID,obj.V,i,alt=obj.Alt,FreqRange=obj.FreqRange,GustDuration=obj.GustDuration);      
         elseif isa(obj.Gusts(i),'ads.nast.gust.Turb')
-            obj.Gusts(i).write_bdf(fid,obj.DAREA_ID+1,obj.V,i,alt=obj.Alt,FreqRange=obj.FreqRange);  
+            obj.Gusts(i).write_bdf(fid,obj.DAREA_ID+1,obj.V,i,alt=obj.Alt,FreqRange=obj.FreqRange); 
         end
     end
 end
