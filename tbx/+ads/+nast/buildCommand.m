@@ -3,6 +3,7 @@ arguments
     runFile
     opts.cmdLineArgs = struct.empty;
     opts.Silent = false;
+    opts.Async = false;
 end
 
 args = struct.empty;
@@ -15,7 +16,12 @@ for f = fieldnames(opts.cmdLineArgs)'
     args.(f{1}) = opts.cmdLineArgs.(f{1});
 end
 
-command = [ads.nast.getExe,' ',runFile];
+exe = ads.nast.getExe;
+if opts.Async
+    exe = strrep(exe,'nastran.exe"','nastranw.exe"');
+end
+
+command = [exe,' ',runFile];
 for f = fieldnames(args)'
     command = [command, ' ',f{1},'=',args.(f{1})];
 end
