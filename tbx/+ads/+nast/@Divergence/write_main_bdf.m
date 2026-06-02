@@ -1,28 +1,32 @@
-function write_main_bdf(obj,filename,includes,opts)
+function write_main_bdf(obj,filename,includes,feModel)
 arguments
     obj
     filename string
     includes (:,1) string
-    opts.trimObjs = [];
+    feModel ads.fe.Component
 end
     fid = fopen(filename,"w");
+    println(fid,'ECHOOFF');
     mni.printing.bdf.writeFileStamp(fid)
     %% Case Control Section
     mni.printing.bdf.writeComment(fid,'This file contain the main cards + case control for a 144 divergence solution')
-    mni.printing.bdf.writeHeading(fid,'Case Control');
+    mni.printing.bdf.writeHeading(fid,'Executive Control');
     mni.printing.bdf.writeColumnDelimiter(fid,'8');
     println(fid,'NASTRAN NLINES=999999');
     println(fid,'SOL 144');
     println(fid,'TIME 10000');
     println(fid,'CEND');
-    mni.printing.bdf.writeHeading(fid,'Case Control')
+    println(fid,'ECHOOFF');
     println(fid,'ECHO=NONE');
+    mni.printing.bdf.writeHeading(fid,'Case Control')
     fprintf(fid,'SPC=%.0f\n',obj.SPC_ID);
-    println(fid,'GROUNDCHECK=YES');
     println(fid,'AEROF=ALL');
     println(fid,'APRES=ALL');
     fprintf(fid,'DIVERG=%.0f\n',obj.Div_ID);
     fprintf(fid,'CMETHOD=%.0f\n',obj.Div_ID);
+    obj.Outputs.WriteToFile(fid);
+    obj.writeGroundCheck(fid);
+
     mni.printing.bdf.writeHeading(fid,'Begin Bulk')
     %% Bulk Data
     println(fid,'BEGIN BULK')
@@ -50,9 +54,7 @@ end
     mni.printing.bdf.writeColumnDelimiter(fid,'8');
     mni.printing.cards.DIVERG(obj.Div_ID,obj.N_Roots,obj.Mach).writeToFile(fid);
     mni.printing.cards.EIGC(obj.Div_ID,obj.eig_meth,obj.N_Roots).writeToFile(fid);
+    println(fid,'ENDDATA')
     fclose(fid);
 
-end
-function println(fid,string)
-fprintf(fid,'%s\n',string);
 end

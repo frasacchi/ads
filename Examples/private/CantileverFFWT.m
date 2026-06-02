@@ -34,7 +34,7 @@ for i = 1:length(xs)
 end
 % create hinge
 hinge = baff.Hinge();
-hinge.HingeVector = -baff.util.rotz(FlareAngle)*[0;1;0];
+hinge.HingeVector = -dcrg.rotzd(FlareAngle)*[0;1;0];
 hinge.Rotation = -FoldAngle;
 hinge.isLocked = 0;
 hinge.Eta = 1;
@@ -61,6 +61,7 @@ wingtip.add(tmp_mass);
 % Add Constraint
 con = baff.Constraint("ComponentNums",123456,"eta",0,"Name","Root Connection");
 con.add(mainBeam);
+mainBeam.A = dcrg.rotzd(90);
 
 % make the model
 model = baff.Model;

@@ -1,10 +1,12 @@
-function write_main_bdf(obj,filename,includes)
+function write_main_bdf(obj,filename,includes,feModel)
 arguments
     obj
     filename string
     includes (:,1) string
+    feModel ads.fe.Component
 end
 fid = fopen(filename,"w");
+println(fid,'ECHOOFF');
 mni.printing.bdf.writeFileStamp(fid)
 %% Case Control Section
 mni.printing.bdf.writeComment(fid,'This file contain the main cards + case control for a 103 solution')
@@ -13,24 +15,16 @@ mni.printing.bdf.writeColumnDelimiter(fid,'8');
 println(fid,'NASTRAN NLINES=999999');
 println(fid,'SOL 103');
 println(fid,'CEND');
-mni.printing.bdf.writeHeading(fid,'Case Control')
+println(fid,'ECHOOFF');
 println(fid,'ECHO=NONE');
+mni.printing.bdf.writeHeading(fid,'Case Control')
 
 fprintf(fid,'METHOD=%.0f\n',obj.EigR_ID);
 fprintf(fid,'SPC=%.0f\n',obj.SPC_ID);
-if obj.WriteToF06
-    println(fid,'DISPLACEMENT(SORT1,REAL)=ALL');
-    println(fid,'FORCE(SORT1,REAL)=ALL');
-    println(fid,'VECTOR(SORT1,REAL)=ALL');
-    println(fid,'GROUNDCHECK=YES');
-else
-    println(fid,'DISPLACEMENT(SORT1,REAL,PLOT)=ALL');
-    println(fid,'FORCE(SORT1,REAL,PLOT)=ALL');
-    println(fid,'VECTOR(SORT1,REAL,PLOT)=ALL');
-    println(fid,'GROUNDCHECK=NO');
-end
 
-% println(fid,'GROUNDCHECK=YES');
+obj.Outputs.WriteToFile(fid);
+obj.writeGroundCheck(fid);
+
 mni.printing.bdf.writeHeading(fid,'Begin Bulk')
 %% Bulk Data
 println(fid,'BEGIN BULK')
@@ -71,8 +65,6 @@ mni.printing.cards.PARAM('LFREQ','r',obj.FreqRange(1)).writeToFile(fid);
 mni.printing.cards.PARAM('HFREQ','r',obj.FreqRange(2)).writeToFile(fid);
 mni.printing.cards.PARAM('LFREQFL','r',obj.FreqRange(1)).writeToFile(fid);
 mni.printing.cards.PARAM('HFREQFL','r',obj.FreqRange(2)).writeToFile(fid);
+println(fid,'ENDDATA')
 fclose(fid);
-end
-function println(fid,string)
-fprintf(fid,'%s\n',string);
 end

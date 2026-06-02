@@ -1,10 +1,12 @@
-function write_main_bdf(obj,filename,includes)
+function write_main_bdf(obj,filename,includes,feModel)
 arguments
     obj
     filename string
     includes (:,1) string
+    feModel ads.fe.Component
 end
     fid = fopen(filename,"w");
+    println(fid,'ECHOOFF');
     mni.printing.bdf.writeFileStamp(fid)
     %% Case Control Section
     mni.printing.bdf.writeComment(fid,'This file contain the main cards + case control for a 146 solution')
@@ -16,11 +18,11 @@ end
     println(fid,'SOL 146');
     println(fid,'TIME 10000');
     println(fid,'CEND');
-    mni.printing.bdf.writeHeading(fid,'Case Control')
+    println(fid,'ECHOOFF');
     println(fid,'ECHO=NONE');
+    mni.printing.bdf.writeHeading(fid,'Case Control')
     fprintf(fid,'SPC=%.0f\n',obj.SPC_ID);
     println(fid,'RESVEC = YES');
-    println(fid,'GROUNDCHECK=YES');
     println(fid,'K2PP = STIFF');   
     println(fid,sprintf('SDAMP = %.0f',obj.SDAMP_ID));
     println(fid,sprintf('FREQ = %.0f',obj.FREQ_ID));
@@ -37,43 +39,13 @@ end
     
     % if any gusts are turbulence cases then we'll want the Power Spectral Density Function (PSDF) in output.
     if turbCount > 0
-        outRqstStr = '(SORT1,REAL,PSDF)';
-    else
-        outRqstStr = '(SORT1,REAL)';
+        for i = 1:length(obj.Outputs)
+            obj.Outputs(i).Args = unique([obj.Outputs(i).Args,"PSDF"]);
+        end
     end
 
-    % write output requests.
-    if ~isempty(obj.DispIDs)
-        if any(isnan(obj.DispIDs))
-            mni.printing.cases.SET(1,obj.EPoint_ID).writeToFile(fid);
-        else
-            mni.printing.cases.SET(1,[obj.DispIDs,obj.EPoint_ID]).writeToFile(fid);
-        end
-        println(fid,['DISPLACEMENT', outRqstStr, ' = 1']);
-    else
-        println(fid,['DISPLACEMENT', outRqstStr,' = ALL']);
-    end
-    if ~isempty(obj.ForceIDs)
-        if any(isnan(obj.ForceIDs))
-            println(fid,['FORCE', outRqstStr, ' = NONE']);
-        else
-            mni.printing.cases.SET(2,obj.ForceIDs).writeToFile(fid);
-            println(fid,['FORCE', outRqstStr, ' = 2']);
-        end
-    else
-        println(fid,['FORCE', outRqstStr, ' = ALL']);
-    end
-    % Add in a case to print stresses if we want them. Can use similar syntax for strain...
-    if ~isempty(obj.StressIDs)
-        if any(isnan(obj.StressIDs))
-            println(fid,['STRESS', outRqstStr, ' = NONE']);
-        else
-            mni.printing.cases.SET(3,obj.StressIDs).writeToFile(fid);
-            println(fid,['STRESS', outRqstStr, ' = 3']);
-        end
-    else
-        println(fid,['STRESS', outRqstStr, ' = ALL']);
-    end
+    obj.Outputs.WriteToFile(fid);
+    obj.writeGroundCheck(fid);
     
     println(fid,'MONITOR = ALL');    
     
@@ -112,8 +84,9 @@ end
          .writeToFile(fid);
 %     mni.printing.cards.EIGR(10,'MGIV','ND',42,'NORM','MAX')...
 %         .writeToFile(fid);
+
+    % write gust specific cards
+    obj.write_gust(fid);
+    println(fid,'ENDDATA')
     fclose(fid);
-end
-function println(fid,string)
-fprintf(fid,'%s\n',string);
 end

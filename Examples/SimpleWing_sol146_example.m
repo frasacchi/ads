@@ -26,7 +26,7 @@ ax.Clipping = false;
 ax.ZAxis.Direction = "reverse";
 axis equal
 
-%% Setup 103 Analysis with Nastran
+%% Setup 146 Analysis with Nastran
 U = 18;  % velocity in m/s
 
 %flatten the FE model and update the element ID numbers
@@ -43,9 +43,7 @@ IDs = fe.UpdateIDs();
 
 
 % create the 'sol' object
-idx = [fe.Points.Tag] == "Root Connection";
-ID = [fe.Points(idx).ID];
-sol = ads.nast.Sol146(ID);
+sol = ads.nast.Sol146(fe.Constraints(1));
 sol.FreqRange = [0 200];
 sol.V = U;
 sol.Mach = 0;
@@ -67,8 +65,12 @@ end
 sol.UpdateID(IDs);
 
 % run Nastran
-BinFolder = 'ex_uw_sol146';
-sol.run(fe,Silent=false,NumAttempts=1,BinFolder=BinFolder);
+Log.setLevel("Trace");
+sol.Outputs(end+1) = ads.nast.OutRequest('FORCE');
+sol.Outputs(end+1) = ads.nast.OutRequest('STRESS');
+[sol.Outputs.WriteToF06] = deal(false); % minimise output in F06 file
+BinFolder = sol.build(fe,'ex_uw_sol146');
+sol.run(BinFolder);
 
 %% plot WRBM response
 res = mni.result.hdf5(fullfile(BinFolder,'bin','sol146.h5'));
@@ -88,7 +90,7 @@ for i = 1:length(Freqs)
     p.DisplayName = sprintf('Freq: %.0f Hz', Freqs(i));
     nexttile(2);
     hold on
-    p = plot(data(i).t,data(i).Force.Mx(:,1));
+    p = plot(data(i).t,data(i).BeamForce.Mx(:,1));
     p.DisplayName = sprintf('Freq: %.0f Hz', Freqs(i));
 end
 nexttile(1);

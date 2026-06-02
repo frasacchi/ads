@@ -1,10 +1,10 @@
-classdef Sol144 < handle
+classdef Sol144 < ads.nast.BaseSol
     %FLUTTERSIM Summary of this class goes here
     %   Detailed explanation goes here
     
     properties
         % generic aero parameters
-        Name = 'SOL144';
+        Name = 'sol144';
 
         %trim Parameters
         ANGLEA = ads.nast.TrimParameter('ANGLEA',0,'Rigid Body');
@@ -19,7 +19,6 @@ classdef Sol144 < handle
         URDD5 = ads.nast.TrimParameter('URDD5',0,'Rigid Body');
         URDD6 = ads.nast.TrimParameter('URDD6',0,'Rigid Body');
 
-        LoadFactor = 1;
         V = 0;
         rho = 0;
         Mach = 0;
@@ -69,9 +68,6 @@ classdef Sol144 < handle
                 obj.Grav_ID = ids.SID + 3;
                 obj.Load_ID = ids.SID + 4;
                 ids.SID = ids.SID + 5;
-        end
-        function str = config_string(obj)
-            str = '';
         end
         function set_trim_steadyLevel(obj,V,rho,Mach,CoM)
             arguments

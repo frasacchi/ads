@@ -1,14 +1,8 @@
-function write_sol144_cards(obj,trimFile,trimObjs)
+function write_sol144_cards(obj,fid)
 arguments
     obj
-    trimFile string
-    trimObjs = [];
+    fid
 end
-    fid = fopen(trimFile,"w");
-    mni.printing.bdf.writeFileStamp(fid)
-    mni.printing.bdf.writeComment(fid,'This file contain the trim cards for a 144 solution')
-    mni.printing.bdf.writeColumnDelimiter(fid,'8');
-
     % define frequency / modes of interest
     mni.printing.bdf.writeComment(fid,'Frequencies and Modes of Interest')
     mni.printing.bdf.writeColumnDelimiter(fid,'8');
@@ -32,9 +26,6 @@ end
         end    
     end  
 
-    % write aero constants
-%     mni.printing.cards.AEROS(obj.RefChord,obj.RefSpan,obj.RefArea,ACSID=obj.ACSID).writeToFile(fid);
-
     % set trim values (NAN is free and will not be included in trim card)
     labels = [];
     mni.printing.bdf.writeComment(fid,'AELINK Cards')
@@ -49,8 +40,8 @@ end
             end
         end    
     end
-    for i = 1:length(trimObjs)
-        trim_obj = trimObjs(i);
+    for i = 1:length(obj.trimObjs)
+        trim_obj = obj.trimObjs(i);
         if ~isempty(trim_obj.Link)
             mni.printing.cards.AELINK(trim_obj.Name,{trim_obj.Link}).writeToFile(fid);
         elseif ~isnan(trim_obj.Value)
@@ -65,8 +56,4 @@ end
     t_card= mni.printing.cards.TRIM(obj.Trim_ID,obj.Mach,Q,...
         labels(:),'AEQR',obj.AEQR);    
     t_card.writeToFile(fid);
-    fclose(fid);
-end
-function println(fid,string)
-fprintf(fid,'%s\n',string);
 end

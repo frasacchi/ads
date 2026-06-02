@@ -1,10 +1,12 @@
-function write_main_bdf(obj,filename,includes)
+function write_main_bdf(obj,filename,includes,feModel)
 arguments
     obj
     filename string
     includes (:,1) string
+    feModel ads.fe.Component
 end
     fid = fopen(filename,"w");
+    println(fid,'ECHOOFF');
     mni.printing.bdf.writeFileStamp(fid)
     %% Case Control Section
     mni.printing.bdf.writeComment(fid,'This file contain the main cards + case control for a 145 solution')
@@ -14,9 +16,9 @@ end
     println(fid,'SOL 145');
     println(fid,'TIME 10000');
     println(fid,'CEND');
-    mni.printing.bdf.writeHeading(fid,'Case Control')
+    println(fid,'ECHOOFF');
     println(fid,'ECHO=NONE');
-    println(fid,'VECTOR(SORT1,REAL)=ALL');
+    mni.printing.bdf.writeHeading(fid,'Case Control')
     println(fid,sprintf('SDAMP = %.0f',obj.SDAMP_ID));
     println(fid,sprintf('FMETHOD = %.0f',obj.FlutterID));
     println(fid,sprintf('METHOD = %.0f',obj.EigR_ID));
@@ -95,7 +97,4 @@ end
      .writeToFile(fid);
      
     fclose(fid);
-end
-function println(fid,string)
-fprintf(fid,'%s\n',string);
 end

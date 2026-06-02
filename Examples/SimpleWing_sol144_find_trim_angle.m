@@ -7,7 +7,8 @@ clear all
 
 % get baff model from private function
 BarChordwisePos = 0.15;
-model = UniformBaffWing(BarChordwisePos=BarChordwisePos,IncludeTipMass=false,IncludeMasses=false);
+model = UniformBaffWing(BarChordwisePos=BarChordwisePos,IncludeTipMass=false,IncludeMasses=true);
+model.Wing.add(baff.Mass((0.85/0.15)*model.GetMass,"Name",'fuselageMass'));
 
 %convert to an FE Model
 opts = ads.baff.BaffOpts();
@@ -26,7 +27,6 @@ axis equal
 
 %% Setup 144 Analysis with Nastran
 U = 18;  % velocity in m/s
-aoa = 1; % AoA in degrees
 
 %flatten the FE model and update the element ID numbers
 fe = fe.Flatten;
@@ -43,10 +43,10 @@ IDs = fe.UpdateIDs();
 
 % create the 'sol' object and update the IDs
 sol = ads.nast.Sol144();
-sol.set_trim_locked(U,1.225,0); %V, rho, Mach
-sol.ANGLEA.Value = deg2rad(aoa);
+sol.set_trim_steadyLevel(U,1.225,0,fe.Constraints(1))
+sol.DoFs = [3];
 sol.Grav_Vector = [0 0 1];
-sol.LoadFactor = 0;
+sol.LoadFactor = -1;
 sol.UpdateID(IDs);
 
 % run Nastran
@@ -54,6 +54,10 @@ Log.setLevel("Trace");
 [sol.Outputs.WriteToF06] = deal(false); % minimise output in F06 file
 BinFolder = sol.build(fe,'ex_uw_sol144');
 sol.run(BinFolder);
+
+filename = fullfile(BinFolder,'bin','sol144.h5');
+resFile = mni.result.hdf5(filename);
+resFile.read_trim
 
 %% load Nastran model and plot deformation
 filename = fullfile(BinFolder,'bin','sol144.h5');

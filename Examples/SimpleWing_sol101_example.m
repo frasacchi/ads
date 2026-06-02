@@ -38,11 +38,17 @@ IDs = fe.UpdateIDs();
 % create the 'sol' object and update the IDs
 sol = ads.nast.Sol101();
 sol.g = 0;                  % disable gravity
-sol.UpdateID(IDs)
+sol.UpdateID(IDs);
 
 % run Nastran
 BinFolder = 'ex_uw_sol101';
-sol.run(fe,Silent=false,NumAttempts=1,BinFolder=BinFolder);
+Log.setLevel("Trace") % see all messages
+sol.Outputs(end+1) = ads.nast.OutRequest('ACCELERATION');
+sol.Outputs(end+1) = ads.nast.OutRequest('GPFORCE');
+sol.Outputs(end+1) = ads.nast.OutRequest('FORCE');
+[sol.Outputs.WriteToF06] = deal(false); % minimise output in F06 file
+BinFolder = sol.build(fe,BinFolder);
+sol.run(BinFolder);
 
 % read result
 filename = fullfile(BinFolder,'bin','sol101.h5');

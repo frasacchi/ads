@@ -8,7 +8,7 @@ fe.Name = obj.Name;
 
 %% genrate coordinate systems
 hv = obj.HingeVector./norm(obj.HingeVector);
-A = ads.util.Rodrigues(hv,obj.Rotation);
+A = dcrg.geom.Rodrigues(hv,deg2rad(obj.Rotation));
 
 %Output Coordinate System
 fe.CoordSys(1) = ads.fe.CoordSys("Origin",obj.Offset,"A",obj.A*A);
@@ -18,8 +18,9 @@ hinge_k = cross(x_dir,hv);
 if norm(hinge_k) == 0
     A = eye(3);
 else
-    hinge_angle = atan2d(norm(hinge_k),x_dir'*hv);
-    A = ads.util.Rodrigues(hinge_k,hinge_angle);
+    nhinge_k = norm(hinge_k);
+    hinge_angle = atan2(nhinge_k,x_dir'*hv);
+    A = dcrg.geom.Rodrigues(hinge_k./nhinge_k,hinge_angle);
 end
 fe.CoordSys(2) = ads.fe.CoordSys("Origin",obj.Offset,"A",obj.A*A);
 

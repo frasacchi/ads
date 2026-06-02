@@ -29,8 +29,8 @@ ax.ZAxis.Direction = "reverse";
 axis equal
 
 %% Setup 144 Analysis with Nastran
-U = 18;  % velocity in m/s
-aoa = 5; % AoA in degrees
+U = 1;  % velocity in m/s
+aoa = 0; % AoA in degrees
 
 %flatten the FE model and update the element ID numbers
 fe = fe.Flatten;
@@ -38,8 +38,8 @@ IDs = fe.UpdateIDs();
 
 % as model was defined with LE at a postive x postion the aero coordinate
 % sytem has to point in the opposite direction (wind moves in positive x direction in aero coord system)
-fe.CoordSys(end+1) = ads.fe.CoordSys(Origin=[0;0;0],A=fh.rotz(180));
-fe.AeroSettings(1) = ads.fe.AeroSettings(0.12,1,2,ACSID=fe.CoordSys(end),SymXZ=true);
+fe.CoordSys(end+1) = ads.fe.CoordSys(Origin=[0;0;0],A=dcrg.rotzd(180));
+fe.AeroSettings(1) = ads.fe.AeroSettings(0.12,1,2,2*0.12,ACSID=fe.CoordSys(end),SymXZ=true);
 for i = 1:length(fe.AeroSurfaces)
     fe.AeroSurfaces(i).AeroCoordSys = fe.CoordSys(end);
 end
@@ -50,13 +50,16 @@ IDs = fe.UpdateIDs();
 sol = ads.nast.Sol144();
 sol.set_trim_locked(U,1.225,0); %V, rho, Mach
 sol.ANGLEA.Value = deg2rad(aoa);
-sol.Grav_Vector = [0 0 1];
+sol.Grav_Vector = [0 0 0];
+sol.g = 0;
 sol.LoadFactor = 0;
 sol.UpdateID(IDs);
 
 % run Nastran
-BinFolder = 'ex_ffwt_sol144';
-sol.run(fe,Silent=false,NumAttempts=1,BinFolder=BinFolder);
+Log.setLevel("Trace");
+[sol.Outputs.WriteToF06] = deal(false); % minimise output in F06 file
+BinFolder = sol.build(fe,'ex_ffwt_sol144');
+sol.run(BinFolder);
 
 %% load Nastran model and plot deformation
 filename = fullfile(BinFolder,'bin','sol144.h5');

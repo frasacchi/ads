@@ -1,10 +1,10 @@
-classdef Divergence < handle
-    %FLUTTERSIM Summary of this class goes here
+classdef Divergence < ads.nast.BaseSol
+    %DIVERGENCE Summary of this class goes here
     %   Detailed explanation goes here
     
     properties
         % generic aero parameters
-        Name = 'SOL144';
+        Name = 'sol144_div';
         Mach = 0;
 
         N_Roots = 1;
@@ -13,14 +13,6 @@ classdef Divergence < handle
         Div_ID = 1
         SPC_ID = 2;
         Load_ID = 4;
-
-        SPCs = [];
-        ForceIDs = [];
-
-        % CoM Info for Boundary Constraints
-        isFree = false; % if is Free a Boundary condition will be applied to  the Centre of Mass
-        CoM = ads.fe.Constraint.empty;
-        DoFs = [];
     end
     
     methods
@@ -37,9 +29,6 @@ classdef Divergence < handle
                 obj.SPC_ID = ids.SID + 1;
                 obj.Load_ID = ids.SID + 2;
                 ids.SID = ids.SID + 3;
-        end
-        function str = config_string(obj)
-            str = '';
         end
     end
 end

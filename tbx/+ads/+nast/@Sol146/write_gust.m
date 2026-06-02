@@ -1,9 +1,4 @@
-function write_gust(obj,gustFile)
-    fid = fopen(gustFile,"w");
-    mni.printing.bdf.writeFileStamp(fid)
-    mni.printing.bdf.writeComment(fid,'This file contain the gust cards for a 146 solution')
-    mni.printing.bdf.writeColumnDelimiter(fid,'8');
-
+function write_gust(obj,fid)
     % define frequency / modes of interest
     mni.printing.bdf.writeComment(fid,'Frequencies and Modes of Interest')
     mni.printing.bdf.writeColumnDelimiter(fid,'8');
@@ -69,8 +64,4 @@ function write_gust(obj,gustFile)
             obj.Gusts(i).write_bdf(fid,obj.DAREA_ID+1,obj.V,i,alt=obj.Alt,FreqRange=obj.FreqRange); 
         end
     end
-    fclose(fid);
-end
-function println(fid,string)
-fprintf(fid,'%s\n',string);
 end

@@ -38,8 +38,8 @@ IDs = fe.UpdateIDs();
 % Add Aero Settings
 % as model was defined with LE at a postive x postion the aero coordinate
 % sytem has to point in the opposite direction (wind moves in positive x direction in aero coord system)
-fe.CoordSys(end+1) = ads.fe.CoordSys(Origin=[0;0;0],A=fh.rotz(180));
-fe.AeroSettings(1) = ads.fe.AeroSettings(0.12,1,2,ACSID=fe.CoordSys(end),SymXZ=true);
+fe.CoordSys(end+1) = ads.fe.CoordSys(Origin=[0;0;0],A=dcrg.rotzd(180));
+fe.AeroSettings(1) = ads.fe.AeroSettings(0.12,1,2,2*0.12,ACSID=fe.CoordSys(end),SymXZ=true);
 for i = 1:length(fe.AeroSurfaces)
     fe.AeroSurfaces(i).AeroCoordSys = fe.CoordSys(end);
 end
@@ -57,8 +57,11 @@ sol.FlutterMethod = 'PKNL';
 sol.UpdateID(IDs);
 
 % run Nastran
-BinFolder = 'ex_ffwt_sol145';
-res = sol.run(fe,Silent=false,NumAttempts=1,BinFolder=BinFolder);
+Log.setLevel("Trace");
+[sol.Outputs.WriteToF06] = deal(false); % minimise output in F06 file
+BinFolder = sol.build(fe,'ex_ffwt_sol145');
+sol.run(BinFolder);
+res = sol.ExtractResults(BinFolder);
 
 %% plot V-G diagrams
 f = figure(2);

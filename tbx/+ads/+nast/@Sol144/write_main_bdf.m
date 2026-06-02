@@ -1,9 +1,9 @@
-function write_main_bdf(obj,filename,includes,opts)
+function write_main_bdf(obj,filename,includes,feModel)
 arguments
     obj
     filename string
     includes (:,1) string
-    opts.trimObjs = [];
+    feModel ads.fe.Component
 end
     fid = fopen(filename,"w");
     %% Case Control Section
@@ -15,7 +15,6 @@ end
     mni.printing.bdf.writeComment(fid,'This file contain the main cards + case control for a 144 solution')
     mni.printing.bdf.writeHeading(fid,'Case Control');
     mni.printing.bdf.writeColumnDelimiter(fid,'8');
-
     println(fid,'NASTRAN NLINES=999999');
     if obj.OutputAeroMatrices
         println(fid,'ASSIGN output4=''../bin/AJJ.op4'',formatted,UNIT=11');
@@ -40,15 +39,6 @@ end
     println(fid,sprintf('TRIM = %.0f',obj.Trim_ID));
     println(fid,sprintf('METHOD = %.0f',obj.EigR_ID));
     fprintf(fid,'SPC=%.0f\n',obj.SPC_ID);
-
-    if ~isempty(obj.K2GG)
-        fprintf(fid,'K2GG=%s\n',obj.K2GG);
-    end
-
-    % if obj.isFree
-    % fprintf(fid,'SUPORT1=%.0f\n',obj.SUPORT1_ID);
-    % end
-
     fprintf(fid,'LOAD=%.0f\n',obj.Load_ID);
     println(fid,'MONITOR = ALL');
     println(fid,'SPCFORCES = ALL');
@@ -71,7 +61,6 @@ end
     println(fid,'AEROF=ALL');
     println(fid,'APRES=ALL');
     mni.printing.bdf.writeHeading(fid,'Begin Bulk')
-    %% Bulk Data
     println(fid,'BEGIN BULK')
     % include files
     for i = 1:length(includes)
@@ -81,10 +70,17 @@ end
     mni.printing.bdf.writeComment(fid, 'SPCs')
     mni.printing.cards.SPCADD(obj.SPC_ID,obj.SPCs).writeToFile(fid);
     % write GRAV + loads
+    % get IDs of extra forces
+    IDs = [];
+    if ~isempty(feModel.Forces)
+        IDs = [IDs,reshape([feModel.Forces.ID],1,[])];
+    end
+    if ~isempty(feModel.Moments)
+        IDs = [IDs,reshape([feModel.Moments.ID],1,[])];
+    end
     mni.printing.bdf.writeComment(fid,'Gravity Card')
     mni.printing.bdf.writeColumnDelimiter(fid,'8');
-    mni.printing.cards.LOAD(obj.Load_ID,1,[obj.Grav_ID;obj.ForceIDs(:)],[1;ones(numel(obj.ForceIDs),1)]).writeToFile(fid);
-    % mni.printing.cards.LOAD(obj.Load_ID,1,obj.ForceIDs',ones(1,length(obj.ForceIDs))).writeToFile(fid);
+    mni.printing.cards.LOAD(obj.Load_ID,1,[obj.Grav_ID,IDs],[1,ones(1,numel(IDs))]).writeToFile(fid);
     mni.printing.cards.GRAV(obj.Grav_ID,obj.g*obj.LoadFactor,obj.Grav_Vector)...
         .writeToFile(fid);
     % genric options 
@@ -104,8 +100,8 @@ end
          .writeToFile(fid);
 %     mni.printing.cards.EIGR(10,'MGIV','ND',42,'NORM','MAX')...
 %         .writeToFile(fid);
+
+    obj.write_sol144_cards(fid);
+    println(fid,'ENDDATA')
     fclose(fid);
-end
-function println(fid,string)
-fprintf(fid,'%s\n',string);
 end

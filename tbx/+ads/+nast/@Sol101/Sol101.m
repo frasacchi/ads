@@ -1,30 +1,16 @@
-classdef Sol101 < handle
-    %FLUTTERSIM Summary of this class goes here
+classdef Sol101 < ads.nast.BaseSol
+    %SOL101 Summary of this class goes here
     %   Detailed explanation goes here
     
     properties
         % generic aero parameters
-        Name = 'SOL101';
-
-        % grav info
-        LoadFactor = 1;
-        g = 9.81;
-        Grav_Vector = [0;0;1];
+        Name = 'sol101';
 
         SPC_ID = 1;
         Grav_ID = 2;
         Load_ID = 3;
-        
-        SPCs = [];
-        ForceIDs = [];
-
-        WriteToF06 = true; % if false minimises whats written to f06.
 
         % CoM Info for Boundary Constraints
-        isFree = false; % if is Free a Boundary condition will be applied to  the Centre of Mass
-        CoM = ads.fe.Constraint.empty;
-        DoFs = [];
-
         ExtraCards = mni.printing.cards.BaseCard.empty;
         ExtraCaseControl = [];
         setCoupledMass = false;
@@ -40,9 +26,6 @@ classdef Sol101 < handle
                 obj.Load_ID = ids.SID + 2;
                 ids.SID = ids.SID + 3;
                 ids.EID = ids.EID + 1;                
-        end
-        function str = config_string(obj)
-            str = '';
         end
     end
 end

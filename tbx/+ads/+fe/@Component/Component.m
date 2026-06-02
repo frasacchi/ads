@@ -51,10 +51,6 @@ classdef Component < handle
             xlabel('X');
             ylabel('Y');
             zlabel('Z');
-            set(fig_handle, 'WindowButtonDownFcn',    @ads.util.plotting.BtnDwnCallback, ...
-                      'WindowScrollWheelFcn',   @ads.util.plotting.ScrollWheelCallback, ...
-                      'KeyPressFcn',            @ads.util.plotting.KeyPressCallback, ...
-                      'WindowButtonUpFcn',      @ads.util.plotting.BtnUpCallback)
             %draw the elements
             plt_obj = obj.drawElement();
 

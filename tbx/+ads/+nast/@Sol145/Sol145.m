@@ -1,11 +1,10 @@
-classdef Sol145 < handle
+classdef Sol145 < ads.nast.BaseSol
     %FLUTTERSIM Summary of this class goes here
     %   Detailed explanation goes here
     
     properties
         % generic aero parameters
-        Name = 'SOL145';
-        LoadFactor = 1;
+        Name = 'sol145';
         V (:,1) double {mustBeNonzero}= 1;
         rho = 0;
         Mach = 0;
@@ -17,9 +16,6 @@ classdef Sol145 < handle
         RefArea = 1;
         RefDensity = 1;
         LModes = 0;
-
-        DispIDs = [];
-        ForceIDs = [];
 
         % freqeuency & Structural Damping Info
         FreqRange = [0.01,50];
@@ -36,7 +32,6 @@ classdef Sol145 < handle
         EigR_ID = 5;
         SPC_ID = 6;
         SDAMP_ID = 7;
-        SPCs = [];
         ReducedFreqs = [0.01,0.05,0.1,0.2,0.5,0.75,1,2,4];
         ReducedMachs = []; % mach numbers to calc aero matrices at, if empty will use linear interpolation from 'Mach'
 
@@ -57,9 +52,6 @@ classdef Sol145 < handle
                 obj.SPC_ID = ids.SID + 5;
                 obj.SDAMP_ID = ids.SID + 6;
                 ids.SID = ids.SID + 7;
-        end
-        function str = config_string(obj)
-            str = '';
         end
         function set_trim_steadyLevel(obj,V,rho,Mach)
             obj.V = V;

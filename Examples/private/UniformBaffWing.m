@@ -16,9 +16,8 @@ mainBeam = baff.Wing.UniformWing(L,BarThickness,BarWidth...
     ,baff.Material.Stainless400,WingChord,opts.BarChordwisePos,"NAeroStations",10,"NStations",20);
 mainBeam.Name = 'Wing 1';
 Rz = [cosd(opts.Sweep) -sind(opts.Sweep) 0; sind(opts.Sweep) cosd(opts.Sweep) 0; 0 0 1];
-for i = 1:length(mainBeam.Stations)
-    mainBeam.Stations(i).EtaDir = Rz*mainBeam.Stations(i).EtaDir;
-end
+mainBeam.Stations.EtaDir = Rz*mainBeam.Stations.EtaDir;
+
 % twists = linspace(0,10,10);
 % for i = 1:10
 %     mainBeam.AeroStations(i).Twist = twists(i);
@@ -59,7 +58,7 @@ end
 % Add Root Constraint
 con = baff.Constraint("ComponentNums",123456,"eta",0,"Name","Root Connection");
 con.add(mainBeam);
-mainBeam.A = ads.util.rotz(90);
+mainBeam.A = dcrg.rotzd(90);
 
 % make the model
 model = baff.Model;
