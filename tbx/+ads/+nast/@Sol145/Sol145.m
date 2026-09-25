@@ -24,9 +24,22 @@ classdef Sol145 < handle
         % freqeuency & Structural Damping Info
         FreqRange = [0.01,50];
         NFreq = 500;
-        ModalDampingPercentage = 0;
+        ModalDampingPercentage = 0; % scalar, or one value per DampingFreqs
+        DampingType = 'CRIT';
+        DampingFreqs = []; % TABDMP1 frequencies (empty: FreqRange)
         ExtraCaseControl = [];
         setCoupledMass = false;
+
+        % eigen solver: 'LAN' writes an EIGRL card, other methods an EIGR card.
+        % FreqRange(2) bounds the modes (empty FreqRange: no bound).
+        EigMethod = 'LAN';
+        EigND = [];
+        EigNorm = 'MAX';
+
+        % extra deck content (e.g. to wrap an existing bdf model in a solution)
+        FileManagement = strings(0,1); % statements written before SOL (e.g. ASSIGN)
+        ExecControl = strings(0,1);    % statements written between SOL and CEND (e.g. DMAP alters)
+        Params struct = struct();      % PARAM values, override the defaults (e.g. Params.WTMASS = 0.00259)
 
         FlutterMethod = 'PK';
         FlutterID = 4;

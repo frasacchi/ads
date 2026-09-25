@@ -11,6 +11,19 @@ classdef Sol103 < handle
         NFreq = 500;
         LModes = 20;
         ModalDampingPercentage = 0;
+        PunchDisplacements logical = false; % also punch the displacements (mode shapes)
+        ExtraCaseControl = [];
+
+        % eigen solver: 'LAN' writes an EIGRL card, other methods an EIGR card.
+        % FreqRange(2) bounds the modes (empty FreqRange: no bound).
+        EigMethod = 'AGIV';
+        EigND = [];
+        EigNorm = 'MAX';
+
+        % extra deck content (e.g. to wrap an existing bdf model in a solution)
+        FileManagement = strings(0,1); % statements written before SOL (e.g. ASSIGN)
+        ExecControl = strings(0,1);    % statements written between SOL and CEND (e.g. DMAP alters)
+        Params struct = struct();      % PARAM values, override the defaults (e.g. Params.WTMASS = 0.00259)
 
         EigR_ID = 1;
         SPC_ID = 2;

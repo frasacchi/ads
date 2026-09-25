@@ -7,7 +7,13 @@ and this project adheres to [Explicit Versioning](https://github.com/exadra37-ve
 
 ## [Unreleased]
 ### Added
+- nast.Sol103/Sol144/Sol145: FileManagement (before SOL, e.g. ASSIGN), ExecControl (before CEND, e.g. DMAP alters) and Params (PARAM overrides / additions) properties, so a solution can be written around an existing bdf model; ExtraCaseControl for Sol103 and Sol144.
+- nast.Sol103/Sol144/Sol145: EigMethod ('LAN' -> EIGRL, else EIGR), EigND and EigNorm for the eigen card; an empty FreqRange drops the frequency bounds and LFREQ/HFREQ.
+- nast.Sol145: DampingType and DampingFreqs for a TABDMP1 table (ModalDampingPercentage can be one value per frequency).
+- nast.Sol103: PunchDisplacements punches the mode shapes.
+- nast.writeParams, writeExtraParams, eigCard, modeParamDefaults, writeLines helpers.
 ### Changed
+- nast.Sol103/Sol144/Sol145: no SPCADD / SPC case control is written when there are no constraint sets.
 ### Deprecated
 ### Removed
 ### Fixed

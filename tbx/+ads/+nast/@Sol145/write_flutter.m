@@ -7,17 +7,20 @@ function write_flutter(obj,flutFile)
     % define frequency / modes of interest
     mni.printing.bdf.writeComment(fid,'Frequencies and Modes of Interest')
     mni.printing.bdf.writeColumnDelimiter(fid,'8');
-    mni.printing.cards.PARAM('LMODES','i',obj.LModes).writeToFile(fid);
-    mni.printing.cards.PARAM('LMODESFL','i',obj.LModes).writeToFile(fid);
-    mni.printing.cards.PARAM('LFREQ','r',obj.FreqRange(1)).writeToFile(fid);
-    mni.printing.cards.PARAM('HFREQ','r',obj.FreqRange(2)).writeToFile(fid);
-    mni.printing.cards.PARAM('LFREQFL','r',obj.FreqRange(1)).writeToFile(fid);
-    mni.printing.cards.PARAM('HFREQFL','r',obj.FreqRange(2)).writeToFile(fid);
+    ads.nast.writeParams(fid,ads.nast.modeParamDefaults(obj.LModes,obj.FreqRange),obj.Params);
 
     %% define Modal damping
     mni.printing.bdf.writeComment(fid,'Modal Damping')
     mni.printing.bdf.writeColumnDelimiter(fid,'8');
-    mni.printing.cards.TABDMP1(obj.SDAMP_ID,'CRIT',obj.FreqRange,ones(1,2).*obj.ModalDampingPercentage).writeToFile(fid);
+    if ~isempty(obj.DampingFreqs)
+        dampFreqs = obj.DampingFreqs;
+    elseif ~isempty(obj.FreqRange)
+        dampFreqs = obj.FreqRange;
+    else
+        dampFreqs = [0,1]; % constant damping, any frequency range
+    end
+    dampVals = ones(1,numel(dampFreqs)).*obj.ModalDampingPercentage(:)';
+    mni.printing.cards.TABDMP1(obj.SDAMP_ID,obj.DampingType,dampFreqs,dampVals).writeToFile(fid);
     
 %     % Aero Properties Section
 %     mni.printing.bdf.writeComment(fid,'Aerodynamic Properties')

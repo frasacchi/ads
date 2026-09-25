@@ -17,6 +17,7 @@ end
     mni.printing.bdf.writeColumnDelimiter(fid,'8');
 
     println(fid,'NASTRAN NLINES=999999');
+    ads.nast.writeLines(fid,obj.FileManagement);
     if obj.OutputAeroMatrices
         println(fid,'ASSIGN output4=''../bin/AJJ.op4'',formatted,UNIT=11');
         println(fid,'ASSIGN output4=''../bin/FFAJ.op4'',formatted,UNIT=12');
@@ -33,13 +34,16 @@ end
         println(fid,'ALTER ''ASDR'' $');
         println(fid,'OUTPUT4 FFAJ,,,,//0/12///8 $');
     end
+    ads.nast.writeLines(fid,obj.ExecControl);
     println(fid,'CEND');
     mni.printing.bdf.writeHeading(fid,'Case Control')
     println(fid,'ECHO=NONE');
     println(fid,'VECTOR(SORT1,REAL)=ALL');
     println(fid,sprintf('TRIM = %.0f',obj.Trim_ID));
     println(fid,sprintf('METHOD = %.0f',obj.EigR_ID));
-    fprintf(fid,'SPC=%.0f\n',obj.SPC_ID);
+    if ~isempty(obj.SPCs)
+        fprintf(fid,'SPC=%.0f\n',obj.SPC_ID);
+    end
 
     if ~isempty(obj.K2GG)
         fprintf(fid,'K2GG=%s\n',obj.K2GG);
@@ -70,6 +74,7 @@ end
     println(fid,'GROUNDCHECK=YES');
     println(fid,'AEROF=ALL');
     println(fid,'APRES=ALL');
+    ads.nast.writeLines(fid,obj.ExtraCaseControl);
     mni.printing.bdf.writeHeading(fid,'Begin Bulk')
     %% Bulk Data
     println(fid,'BEGIN BULK')
@@ -78,8 +83,10 @@ end
         mni.printing.cards.INCLUDE(includes(i)).writeToFile(fid);
     end
     %write Boundary Conditions
-    mni.printing.bdf.writeComment(fid, 'SPCs')
-    mni.printing.cards.SPCADD(obj.SPC_ID,obj.SPCs).writeToFile(fid);
+    if ~isempty(obj.SPCs)
+        mni.printing.bdf.writeComment(fid, 'SPCs')
+        mni.printing.cards.SPCADD(obj.SPC_ID,obj.SPCs).writeToFile(fid);
+    end
     % write GRAV + loads
     mni.printing.bdf.writeComment(fid,'Gravity Card')
     mni.printing.bdf.writeColumnDelimiter(fid,'8');
@@ -88,22 +95,26 @@ end
     mni.printing.cards.GRAV(obj.Grav_ID,obj.g*obj.LoadFactor,obj.Grav_Vector)...
         .writeToFile(fid);
     % genric options 
-    mni.printing.cards.PARAM('POST','i',0).writeToFile(fid);
-    mni.printing.cards.PARAM('AUTOSPC','s','YES').writeToFile(fid);
-    mni.printing.cards.PARAM('GRDPNT','i',0).writeToFile(fid);
-    mni.printing.cards.PARAM('BAILOUT','i',-1).writeToFile(fid);
-    mni.printing.cards.PARAM('OPPHIPA','i',1).writeToFile(fid);
-    mni.printing.cards.PARAM('AUNITS','r',0.1019716).writeToFile(fid);
+    params = ads.nast.writeParams(fid,{...
+        'POST','i',0;...
+        'AUTOSPC','s','YES';...
+        'GRDPNT','i',0;...
+        'BAILOUT','i',-1;...
+        'OPPHIPA','i',1;...
+        'AUNITS','r',0.1019716},obj.Params);
     mni.printing.cards.MDLPRM('HDF5','i',0).writeToFile(fid);
     
     %create eigen solver and frequency bounds
     mni.printing.bdf.writeComment(fid,'Eigen Decomposition Method')
     mni.printing.bdf.writeColumnDelimiter(fid,'8');
-    mni.printing.cards.EIGR(obj.EigR_ID,'MGIV','F1',0,...
-         'F2',obj.FreqRange(2),'NORM','MAX')...
-         .writeToFile(fid);
+    eig = ads.nast.eigCard(obj.EigR_ID,obj.EigMethod,obj.FreqRange,obj.EigND,obj.EigNorm);
+    eig.writeToFile(fid);
 %     mni.printing.cards.EIGR(10,'MGIV','ND',42,'NORM','MAX')...
 %         .writeToFile(fid);
+
+    % PARAMs not written here or in the trim file (write_sol144_cards)
+    modeParams = ads.nast.modeParamDefaults(obj.LModes,obj.FreqRange);
+    ads.nast.writeExtraParams(fid,obj.Params,[params;string(modeParams(:,1))]);
     fclose(fid);
 end
 function println(fid,string)

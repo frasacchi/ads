@@ -12,12 +12,7 @@ end
     % define frequency / modes of interest
     mni.printing.bdf.writeComment(fid,'Frequencies and Modes of Interest')
     mni.printing.bdf.writeColumnDelimiter(fid,'8');
-    mni.printing.cards.PARAM('LMODES','i',obj.LModes).writeToFile(fid);
-    mni.printing.cards.PARAM('LMODESFL','i',obj.LModes).writeToFile(fid);
-    mni.printing.cards.PARAM('LFREQ','r',obj.FreqRange(1)).writeToFile(fid);
-    mni.printing.cards.PARAM('HFREQ','r',obj.FreqRange(2)).writeToFile(fid);
-    mni.printing.cards.PARAM('LFREQFL','r',obj.FreqRange(1)).writeToFile(fid);
-    mni.printing.cards.PARAM('HFREQFL','r',obj.FreqRange(2)).writeToFile(fid);
+    ads.nast.writeParams(fid,ads.nast.modeParamDefaults(obj.LModes,obj.FreqRange),obj.Params);
 
     % create aestat cards
     mni.printing.bdf.writeComment(fid,'AESTAT Cards')
