@@ -3,7 +3,7 @@ arguments
     obj baff.Model
     baffOpts = ads.baff.BaffOpts();
 end
-%BAFF2FE Summary of this function goes here
+%baff2fe Summary of this function goes here
 %   Detailed explanation goes here
 fe = ads.fe.Component();
 fe.Name = obj.Name;
