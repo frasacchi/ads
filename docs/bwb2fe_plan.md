@@ -1,106 +1,146 @@
-# `bwb2fe` — Blended-Wing-Body FE generation for ADS (implementation plan)
+# `bwb2fe` — BWB aeroelastic model generation for ADS (implementation plan, v2)
 
-> **Purpose.** This is a working plan for Claude Code (or a developer) to add a
-> `bwb2fe` capability to **ADS**, with the supporting edits in **BAFF** and
-> **Matran (mni)**. It generates an MSC Nastran model of an **A320-class BWB** in
-> one of two forms:
+> **Goal.** Build an **A320-class blended-wing-body (BWB)** MSC Nastran model in ADS for
+> **aeroelastic stability and dynamic behaviour**: find where the free-flying aircraft becomes
+> **dynamically unstable** (body-freedom flutter (BFF), classical flutter, divergence), and
+> describe its **rigid + flexible dynamics** (short period, BFF coalescence, gust/control response).
 >
-> * **Shell path** (`Shell=true`): a fully defined wingbox-like primary structure
->   of `CQUAD4`/`PSHELL` elements (cabin pressure vessel + mid section + outer
->   wing box), routed through the existing `shell2fe`.
-> * **Beam path** (`Shell=false`): a 1-D beam idealisation whose section
->   properties come from a **wingbox reduction** (thin-walled multi-cell
->   condensation), optionally **calibrated against the shell model**.
+> `ads.bwb.bwb2fe` produces the structure in one of two forms:
 >
-> In both paths the **centre body carries DLM (`CAERO1`) panels**. It holds about
-> 64 % of the planform area, so unlike an A320 fuselage it cannot be left out of
-> the aero model.
+> * **Shell** (`Shell=true`): `CQUAD4`/`PSHELL` wingbox (centre body + mid section + outer wing box),
+>   routed through the existing `shell2fe`.
+> * **Beam** (`Shell=false`): a 1-D **wingbox reduction** (multi-cell thin-walled condensation, with a
+>   centreline spine), optionally calibrated against the shell model.
 >
-> Three structural cases are defined: **1-bay, 3-bay and 5-bay** cabins (Gern 2012).
+> Both forms carry **DLM `CAERO1` panels on the centre body**, which holds about 64 % of the planform,
+> and **payload as distributed mass**.
 >
-> Status: **plan only — no repository code has been changed.** The "trial" of the
-> current shell and beam paths (§2) was done by **reading and tracing the code**.
-> MATLAB and Nastran were not available where this plan was written, so Phase 0
-> repeats the trials on a machine that has them.
+> **v2 changes (aeroelastic focus):**
+> * Cabin layout detail is reduced. The home-plate cabin now only defines the payload region and the
+>   pressure-vessel walls, which set the centre-body stiffness.
+> * Pressure loading is optional.
+> * New inputs for BFF (§2) and new stability and flight-dynamics workflows (§10–§11).
+> * Code snippets for every repository edit (§12).
+>
+> Status: **plan only; no repository code changed.** The "trial" of the current code (§3) was done by
+> reading and tracing the source. MATLAB and Nastran were not available where this was written, so
+> Phase 0 repeats the trials on a machine that has them.
 
 ---
 
 ## 0. How to use this document (Claude Code working agreement)
 
-1. Work **phase by phase** (§10). Each phase lists the files it touches and its
-   acceptance checks. Do not start a phase until the previous phase's checks pass.
-2. MATLAB ≥ R2022a and MSC Nastran must be available locally. After each phase run
-   `runtests('tests')`. Nastran-dependent tests are tagged `"Nastran"` so they
-   can be excluded when Nastran is not present.
-3. Repositories and branch: `frasacchi/ads`, `frasacchi/baff`, `frasacchi/Matran`,
-   all on `claude/vigilant-hamilton-kxm445`. Keep BAFF changes geometry-only and
-   put FE-specific logic in ADS (see the repo CLAUDE.md files).
-4. Every new card or element needs a unit test that exports a BDF and checks the
-   text (see existing `tests/baff2feTest.m`).
-5. Code snippets below are **sketches** against the current APIs (checked against
-   the source). Names marked *(new)* do not exist yet.
+1. Work **phase by phase** (§13). Do not start a phase until the previous phase's acceptance checks pass.
+2. You need MATLAB ≥ R2022a and MSC Nastran locally. Run `runtests('tests')` after each phase.
+   Tests that need Nastran carry the tag `"Nastran"`.
+3. Repositories and branch: `frasacchi/ads`, `frasacchi/baff`, `frasacchi/Matran`, all on
+   `claude/vigilant-hamilton-kxm445`. BAFF stays geometry-only; FE and Nastran logic goes in ADS.
+4. Snippets are **sketches** against the current APIs (checked against the source). Items marked
+   *(new)* do not exist yet. Where a DMAP line number or subDMAP name is version-dependent, it is flagged.
 
 ---
 
-## 1. Sources and what each one contributes
+## 1. Sources
 
-| Source | What we take |
+| Source | What is used |
 |---|---|
-| **Gern, "Finite Element Based HWB Centerbody Structural Optimization and Weight Prediction" (NASA LaRC, 20120008184) — key literature** | Three components: **centre body, mid section, outboard wing**. Spars in the mid section and outer wing at **12.5 % / 62.5 %** chord. **"Home-plate"** cabin (Nickol & McCullers). **1/3/5-bay** options: 1-bay is fast but gives unrealistic pressure displacements; 3- and 5-bay give displacement relief; a 4-bay layout is rejected because of the centreline wall. All-`CQUAD4` model with front/rear spars, skins, side walls and internal walls (2.5–3.5 k elements). **PRSEUS stiffness via the `PSHELL` 12I/T³ entry.** DLM `CAERO` panels from sliced OML, with twist and camber as fixed downwash, splined to the front and rear spars. Load cases **2.5 g, −1.0 g, 1.33 P** with safety factor 1.5. Symmetric **half model**. Aft body not modelled; cockpit 2 000 lb. For fewer than ~270 pax the cabin layout decides the wall arrangement, and **3-bay is the practical choice**. |
-| **Joseph et al., "MER for Conceptual Design of BWB Cabin with Advanced Structures" (NASA Ames, SciTech)** | Cabin parameterisation from `A_CB, FR=b_CB/ℓ_CB, θ_CB, SR=b_CB/b` (Eqs 1–7). **2P (20 psi) internal pressure is the critical case**, plus a 2.5 g × 1.5 manoeuvre. Triangular lift on the centre body (⅓ of the lift). Outer-wing shear and moment applied at the junction from an elliptic load (Eqs 20–27). IM7-8552 and PRSEUS properties (Tables 3–5). A 5-bay cabin is used throughout (no weight difference below 300 pax). The **MER gives a weight cross-check** for our FE mass. |
-| **Ikeda & Bil, "Aerodynamic Performance of a BWB" (ICAS 2006)** | The Bradley cabin-weight regression `W = K_s·0.316422·TOGW^0.166552·S_cab^1.061158`, and component weight trends. Used only as a sanity cross-check. |
-| **"gemini first plan.txt"** | The A320neo targets and the BWB sizing used here: b = 35.8 m, S ≈ 220 m² (140 m² inner / 80 m² outer), AR_ext 6.84, MTOM 79 t, OEW 41.2 t, payload 20 t, fuel 17.8 t, lift share ≈ 38 % centre body / 62 % outer wing, CAERO1 + SPLINE per segment with **no spline overlap across the kink**, SOL 144/145 set-up, AELINK-geared elevons. |
-| Origin chat (claude.ai share link) | **Could not be read.** The link returned only a company information page. This plan is built from the prompt text and the four attachments. |
+| **Gern, NASA 20120008184 (key)** | Three components (centre body / mid section / outboard wing). Spars at 12.5 %/62.5 %. Home-plate cabin. **1/3/5-bay** walls. All-`CQUAD4` model. PRSEUS modelled through `PSHELL` 12I/T³. DLM from sliced OML with camber/twist downwash, splined to the spars. Half model. |
+| **Joseph et al. (NASA Ames) MER** | Cabin parameterisation (A_CB, FR, θ_CB, SR); IM7-8552 and PRSEUS data; cabin-weight cross-check. |
+| **Ikeda & Bil (ICAS)** | Bradley cabin regression (sanity check only). |
+| **gemini first plan** | A320neo-class targets: b = 35.8 m, S ≈ 220 m², masses, 38/62 lift share, per-segment splines, SOL144/145 set-up, AELINK-geared elevons, body-freedom flutter. |
+| Origin chat link | **Could not be read** (the link returned a company information page). |
 
 ---
 
-## 2. Trial of the current formulation (traced from the code)
+## 2. Additional inputs for aeroelastic stability, BFF and flight dynamics
 
-### 2.1 Shell path (`baff.Wing` + `ShellStation` → `wing2fe` → `shell2fe` → `ads.fe.Shell`)
+Yes, several inputs should be added. BFF comes from the **short-period mode** (rigid pitch/plunge,
+whose frequency rises with speed) **coalescing with the first symmetric wing/body bending mode**. So
+the inputs that set the short-period frequency (CG vs neutral point, pitch inertia, Cmα) and the
+elastic frequencies (stiffness, mass distribution) matter far more than the cabin layout.
 
-| # | Finding | Where | Consequence | Fixed in |
+| Group | Input *(new unless noted)* | Default | Why it matters |
+|---|---|---|---|
+| **Mass cases** | `BWBMass.Case` ∈ MTOM / MZFW / OEW+reserve / Custom; `PayloadFraction`, `FuelFraction` | MTOM | BFF speed changes strongly with mass and fuel state. Sweep the cases. |
+| **Payload as distributed mass** | `PayloadArealDensity` over the payload region (the home-plate polygon), plus `PayloadBias` (linear fore/aft gradient) | uniform, bias 0 | Sets CG and **pitch inertia I_yy** with no cabin detail. The bias is the CG-trimming knob. |
+| **CG / static margin** | `CGTarget` = `"StaticMargin"` with `StaticMargin` (fraction of MAC), or an absolute `XCG` | SM = 0.05 | Short-period frequency grows with static margin, so the BFF onset speed depends on it. NP comes from the rigid SOL144 (§10.2). |
+| **Inertia check** | `IyyTarget` (optional); reported always: mass, CG, I_xx, I_yy, I_zz (§8.3) | report | The BWB's low I_yy, relative to its mass, drives BFF. |
+| **Fuel tanks** | `FuelTanks(k)`: eta range, capacity, fill fraction | OW 5.3 t + MS 3.6 t per side | Wing mass shifts the bending frequency and the CG. |
+| **Engines** | mass, position, **pylon frequency** (or stiffness) | 4 000 kg each; 3 Hz pitch | Engine/pylon modes can couple into BFF or wing flutter. |
+| **Stiffness scaling** | `StiffnessScale.CB/MS/OW` (scales E,G on shells or EI,GJ on beams; **mass unchanged**) | 1 | Sweeps to find where instability enters the envelope. |
+| **Structural damping** | `StructuralDamping` (% critical, `TABDMP1 CRIT`) | 0 (boundary); 1–2 % realistic | Positions the damping-zero crossing. |
+| **Free-free BCs** | `KeepRigidBodyModes=true`, SUPORT at CG, `Symmetry` = sym/antisym | true, sym | **Needed for BFF.** Today's defaults drop the rigid modes (finding A1). |
+| **Modal basis** | `NModes`, `FMax` | 40, 30 Hz | Rigid + about 30 elastic modes. |
+| **Flight envelope** | altitudes, EAS range to beyond 1.15·V_D, **matched points** (M, ρ from altitude) | 0–11.9 km; 60–260 m/s EAS | Gives the flutter boundary per altitude. V_D ≈ 381 KEAS, M_D 0.89 (A320-like). |
+| **Unsteady aero** | `ReducedFreqs` dense at low k; `MachList` for MKAERO; box size; `RefC` = MAC | k = 0.001…1.5; M = 0.2/0.5/0.7/0.78 | BFF and rigid modes sit at **low k** (≈ 0.02–0.3). |
+| **Aero calibration** | `CLaTarget`, `XNPTarget` (or WKK factors); centre-body camber/reflex; tip washout | off; reflex 0.05; −3° | The DLM's Cmα sets the short period. Calibrate if CFD/VLM data exist. |
+| **Controls** | elevon/aileron layout (§9.4); for ASE later: actuator bandwidth | as §9.4 | Trim, control effectiveness/reversal, and flight-dynamics inputs. |
+| **Gusts** (dynamic behaviour) | 1-cos gust lengths, turbulence (existing `ads.nast.gust.*`) | CS-25 | Response of the flexible free-flying aircraft. |
+
+**Reduced or removed:** detailed cabin packaging and seat counts. Pressure loading is kept as an
+optional case (`IncludePressure=false`); it does not change the linear stability results.
+
+---
+
+## 3. Trial of the current formulation (traced from the code)
+
+### 3.1 Shell path (`ShellStation` → `wing2fe` → `shell2fe` → `ads.fe.Shell`)
+
+| # | Finding | Where | Consequence | Phase |
 |---|---|---|---|---|
-| F1 | `shell2fe` reads `obj.Stations.SecondaryBeams`, but `baff.station.ShellStation.ShellStation` has no such property, and `baff.station.LBeam` does not exist in BAFF (it probably lives only in a local fork). | `ads/.../private/shell2fe.m:311` | **Every shell wing errors** ("Unrecognized property 'SecondaryBeams'") before `Etas` is returned. | Ph 1 |
-| F2 | Nothing generates a mesh. `Wing.FromLETESweep_Shell` makes a `ShellStation` with empty `Nodes/Shell/SecondaryNodes`. | `baff/.../@Wing/Wing.m:367` | 0 shells. The RBE3 hubs get no independent grids, so Nastran fails fatally. **A mesher is mandatory.** | Ph 2 |
-| F3 | `SecondaryNodes` is `(:,4)` and read as `numel(SecondaryEta)` blocks of equal size, but no layout is documented. | `shell2fe.m:245-253` | A mesher must emit rings of equal length per station, padded to a multiple of 4. | Ph 2 |
-| F4 | A single material, `Stations.Mat(1)`, is used for every shell; `shells(i).Mat` is ignored. | `shell2fe.m:238,242` | Skins, PRSEUS bulkheads, internal walls and ribs cannot have different materials. | Ph 1 |
-| F5 | `PSHELL` is written with MID1=MID2=MID3, **12I/T³ left blank, and no TS/T or NSM**. The Matran `PSHELL` card has only 6 fields. | `ads/.../Shell.m:1161`, `Matran/.../PSHELL.m` | Neither Gern's PRSEUS bending ratio nor smeared non-structural mass can be represented. | Ph 1 |
-| F6 | Each shell gets its own PID. | `Shell.m` `UpdateID` | Acceptable for sizing, but 2–5 k PSHELLs. Add optional grouping. | Ph 1 |
-| F7 | `Shell.GetMass` returns 0 with a warning. `Component.GetMass` ignores `Shells` and `LBeams`. | `Shell.m:1081`, `Component.m:25` | MATLAB-side mass/CG budget is wrong for shell models (Nastran itself is fine). | Ph 1 |
-| F8 | `ads.fe.Shell` supports `CQUAD4` only (`G (4,1)`). Matran already has `CTRIA3`. | `Shell.m` | Fine if the mesh stays structured (plan below). `CTRIA3` is needed only for later transitions. | Ph 7 |
-| F9 | RBE3 hubs use `REFC=123456` **and `Ci=123456`** on the independent skin grids. | `shell2fe.m:284-286` | MSC recommends translational `Ci=123`. Rotations of shell grids (drilling DOF) degrade conditioning. | Ph 1 |
-| F10 | With `SplineType==1`, **every** attachment node of the whole wing goes into **every** panel's SPLINE1 set. The centre body is splined to one RBE3 hub per station plus rigid LE/TE bars. | `wing2fe.m:886-888` | Splines overlap across the kink (the gemini warning). The 17 m centre-body chord is **chordwise-rigid** in the aero coupling. | Ph 3 |
-| F11 | The default `LeTeEdgeMode="drop"` rejects LE/TE bars whose beam-normal plane leaves through the root chord. | `wing2fe.m:812` | On a 60°-swept, 17 m-chord centre body, many stations are expected to lose their LE/TE nodes (T2 measures this). Use `"clip"` or streamwise ribs. | Ph 3 |
-| F12 | `ShellStation.interpolate` drops `Nodes/Shell` (TODO). `Duplicate` drops `ConstrainedEta`. | `ShellStation.m:53,85` | Any code that interpolates stations silently loses the mesh. | Ph 1 |
-| F13 | `ShellStation` `ToBaff`/`FromBaff` are copies of the *Beam* station IO (they write `obj.A/I/J`, and `FromBaff` returns `baff.station.Beam`). | `baff/.../+ShellStation/ToBaff.m`, `FromBaff.m` | Shell BWBs cannot be saved to or loaded from `.baff` HDF5. | Ph 1 |
-| F14 | No pressure-load card (`PLOAD4`) in Matran, and no pressure element in ADS. | — | **The 1.33P/2P cabin case, which sizes the centre body (Gern Fig 16, Joseph), cannot be run.** | Ph 4 |
-| F15 | `AeroSettings.SymXZ` is a logical. | `AeroSettings.m:78` | An antisymmetric half model (`SYMXZ=-1`) cannot be written. | Ph 3 |
-| F16 | The examples pass the **full** area as `RefS` on half models. The MSC AEROS remark says REFB = full span, **REFS = half area for half-span models**. | `Examples/SimpleWing_sol144_example.m` | Check coefficient normalisation (verify in the QRG for your version). | Ph 3 |
+| F1 | `shell2fe` reads `Stations.SecondaryBeams`, which `baff.station.ShellStation.ShellStation` does not have (`baff.station.LBeam` is not in BAFF either). | `ads/.../private/shell2fe.m:311` | **Every shell wing errors.** | 1 |
+| F2 | No mesher: `Wing.FromLETESweep_Shell` leaves `Nodes/Shell/SecondaryNodes` empty. | `baff/.../@Wing/Wing.m:367` | 0 shells and empty RBE3s, so Nastran stops with a fatal error. | 2 |
+| F3 | The `SecondaryNodes (:,4)` layout (equal blocks per `SecondaryEta`) is implicit. | `shell2fe.m:245-253` | The mesher must emit equal-length rings, padded to multiples of 4. | 2 |
+| F4 | One material (`Stations.Mat(1)`) for all shells. | `shell2fe.m:238,242` | Per-region materials and stiffness scaling are impossible. | 1 |
+| F5 | `PSHELL` has 12I/T³ blank and no TS/T or NSM; the Matran `PSHELL` card has 6 fields. | `Shell.m:1161`, `Matran/.../PSHELL.m` | No PRSEUS bending ratio and **no smeared payload NSM**. | 1 |
+| F6 | One PID per shell. | `Shell.m` `UpdateID` | Allow grouping. | 1 |
+| F7 | `Shell.GetMass` returns 0; `Component.GetMass` ignores Shells and LBeams. | `Shell.m:1081`, `Component.m:25` | MATLAB mass, CG and inertia are wrong, so CG targeting fails. | 1 |
+| F8 | `CQUAD4` only. | `Shell.m` | Fine with a structured mesh. | 7 |
+| F9 | RBE3 `Ci=123456` on independent shell grids. | `shell2fe.m:286` | Use `Ci=123`. | 1 |
+| F10 | SPLINE1 gets every attachment node of the wing for every panel; the centre body is splined to one hub per station plus rigid LE/TE bars. | `wing2fe.m:886-888` | Splines overlap across the kink, and the centre body's **chordwise bending is lost from the aero coupling**. That coupling matters for BFF. | 3 |
+| F11 | `LeTeEdgeMode="drop"` default. | `wing2fe.m:812` | The 60°-swept centre body is expected to lose many LE/TE nodes (T2 measures this). | 3 |
+| F12 | `ShellStation.interpolate` drops the mesh; `Duplicate` drops `ConstrainedEta`. | `ShellStation.m:53,85` | Interpolation silently loses the mesh. | 1 |
+| F13 | ShellStation `ToBaff`/`FromBaff` are copies of the Beam IO. | `+ShellStation/ToBaff.m` | No `.baff` save/load for shells. | 7 |
+| F14 | No `PLOAD4` or pressure element. | — | Pressure case unavailable (now optional). | 7 |
+| F15 | `AeroSettings.SymXZ` is a logical. | `AeroSettings.m:78` | **Antisymmetric** half model impossible. | 3 |
+| F16 | Examples pass the full area as `RefS` on half models; the MSC AEROS remark says REFS = half area. | `Examples/SimpleWing_sol144_example.m` | Check coefficient normalisation. | 3 |
 
-### 2.2 Beam path (`baff.Wing` + `baff.station.Beam` → `wing2fe` → `beam2fe` → `CBEAM/PBEAM`)
+### 3.2 Beam path (`baff.station.Beam` → `beam2fe` → `CBEAM`)
 
 | # | Finding | Consequence |
 |---|---|---|
-| B1 | The only wingbox→beam reduction in these repos is `cast.size.WingBoxSizing.BeamCondensation`, called from `baff/tests/@TAW/ApplyWingParams.m`. The TAW geometry puts spars at 15/65 % and sets box height = t/c·c·mean(airfoil thickness at the spars). **`cast` is not in these repos.** | The BWB beam path needs a self-contained `ads.bwb.boxCondensation` *(new)*. If your `shell=false` reduction lives somewhere else (a local fork), point Claude at it and §6.1 will wrap it instead. |
-| B2 | `beam2fe` itself is sound. It writes CBEAM with A, I, J per station plus DMIG, and PBEAM `I1=I(3,3)`, `I2=I(2,2)`. Baff `Bar` uses `I(2,2)=∫z²dA` (flap) and `I(3,3)=∫y²dA` (chordwise). | Use that convention: `I = diag([Iyy+Izz, Iyy_flap, Izz_chord])`. |
-| B3 | `baff.station.Beam.HollowRect` computes `Iyy = h·w³/12`, which **swaps Iyy and Izz** relative to `Bar`. | Do not use `HollowRect` for wingboxes until it is fixed (BAFF edit, Ph 5). |
-| B4 | A single spanwise stick through a 17 m-chord centre body with rigid LE/TE bars makes the centre body chordwise-rigid. The internal walls are parallel to the spanwise section cut, so **bay count has no effect on the stick stiffness**. | Add a **longitudinal spine** (cruciform stick). Its multi-cell section *is* set by the bay walls (§6.2). |
-| B5 | Shell hubs (RBE3 reference nodes at `SecondaryEta`) already form a natural 1-D node set. | Use them for **shell-calibrated beam identification** (§6.3): the beam path is then checked against the shell path. |
+| B1 | The only wingbox→beam reduction is `cast.size.WingBoxSizing.BeamCondensation` (called from `baff/tests/@TAW/ApplyWingParams.m`), and **`cast` is not in these repos**. | Re-implement it as `ads.bwb.boxCondensation` (§7.1). If your `shell=false` reduction is elsewhere, wrap that instead. |
+| B2 | `beam2fe` writes PBEAM `I1=I(3,3)`, `I2=I(2,2)`; BAFF `Bar` uses `I(2,2)=∫z²` (flap) and `I(3,3)=∫y²`. | Convention: `I = diag([Iyy+Izz, Iyy_flap, Izz_chord])`. |
+| B3 | `baff.station.Beam.HollowRect` swaps Iyy and Izz relative to `Bar`. | Fix before using it (Ph 5). |
+| B4 | A single spanwise stick makes the 17 m centre body chordwise-rigid, and bay walls do not enter its section. | Add the centreline **spine** (§7.2). The centre-body pitch-plane bending takes part in BFF. |
+| B5 | Shell RBE3 hubs form a natural 1-D node set. | Use them for shell-calibrated beams (§7.3). |
 
-### 2.3 Phase-0 trial scripts (run locally to confirm §2.1/§2.2)
+### 3.3 Aeroelastic-solution findings (new in v2)
+
+| # | Finding | Where | Consequence | Phase |
+|---|---|---|---|---|
+| **A1** | `modeParamDefaults` writes `LFREQ`/`LFREQFL = FreqRange(1)`, and the default `FreqRange` is `[0.01 50]`. **Rigid-body modes at 0 Hz are removed from the modal flutter basis.** | `+nast/modeParamDefaults.m:12,14`; `Sol145.m:25` | **The default SOL145 cannot predict body-freedom flutter or the short period.** | 4 |
+| A2 | `Sol103` defaults to `EigMethod='AGIV'`, which writes `EIGR F1=0`. Numerically slightly negative rigid roots may be missed. | `Sol103.m:19`, `eigCard.m` | Use `LAN` (EIGRL with V1 blank) for free-free runs. | 4 |
+| A3 | `read_flutter_summary` assigns `M = machs(j)` and `RHO_RATIO = dens(j)` by point index. | `Matran/.../read_flutter_summary.m:62-63` | Correct only for **PKNL matched lists** (or single ρ and M). Use PKNL matched points (§10.3). | 4 |
+| A4 | `Sol145.run` sets `CoM.ComponentNumbers = inv_dof(DoFs)` and `SupportNumbers = DoFs`; the symmetric default is `DoFs=35`. | `Sol145/run.m:133` | Antisymmetric needs `246`. The CoM grid must be an **independent** grid. | 4 |
+| A5 | No export of the generalised matrices (QHH, MHH, KHH, BHH) from SOL145. The Sol144 `AJJ` DMAP alter is version-dependent. Matran `op4.read_matrix` reads **one real** matrix only. | `Sol144/write_main_bdf.m:27-36`; `Matran/.../@op4/read_matrix.m` | No state-space or flight-dynamics model yet. Add export and a multi/complex OP4 reader. | 6 |
+| A6 | `Sol145.ReducedFreqs` default `[0.01 0.05 0.1 0.2 0.5 …]` is sparse at low k. | `Sol145.m:53` | Poor quasi-steady and BFF accuracy. Use a dense low-k set. | 4 |
+| A7 | `Component` has no CG/inertia method, and `Mass.GetMass` starts with `m = size(obj)`, which returns `[m 1]` for a single mass (+1 kg). | `Component.m`, `Mass.m:33` | CG and I_yy reporting and static-margin targeting need new code. | 1 |
+| A8 | No reader for SOL144 stability derivatives. | Matran `@f06` | Compute NP from AEROF resultants instead (§10.2). | 4 |
+
+### 3.4 Phase-0 trial scripts (run locally)
 
 ```matlab
 %% T1 — shell path as-is: expected to stop at shell2fe.m:311 (F1)
 w = baff.Wing.FromLETESweep_Shell(10,2,[0 1],[0 0],[0 0],0.4,baff.Material.Aluminium);
-[nodes,shells,secEta,secNodes] = tinyBoxMesh(w,4,5);   % 4 chordwise x 5 spanwise box (local helper, §5.1 logic)
+[nodes,shells,secEta,secNodes] = tinyBoxMesh(w,4,5);  % 20-line helper using the §6.1 logic
 st = w.Stations;  st.Nodes = nodes;  st.Shell = shells;
 st.SecondaryEta = secEta;  st.SecondaryNodes = secNodes;  w.Stations = st;
 w.A = ads.util.rotz(90);  w.Name = "trialShell";
 m = baff.Model;  m.AddElement(w);  m.UpdateIdx();
-fe = ads.baff.baff2fe(m);                              % F1 error expected here
-% after the Ph-1 guard: fe.Flatten; fe.UpdateIDs; fe.Export('trial_shell.bdf') and inspect the PSHELL/RBE3 cards
+fe = ads.baff.baff2fe(m);                               % F1 expected
 
-%% T2 — beam path on the BWB planform: aero panels on the centre body and LE/TE node loss (F11)
+%% T2 — beam path on the BWB planform: centre-body panels and LE/TE loss (F10/F11)
 Y = [0 4.0 6.2 17.9];  c = [17 10 5 1.84];  b = Y(end);
 w = baff.Wing.FromLETESweep(b,c(1),Y/b,[60.26 60.26 32 32],[0 -27.6 19.5 19.5], ...
         [0.544 0.5 0.375 0.375],baff.Material.Aluminium,ThicknessRatio=[0.17 0.17 0.14 0.11]);
@@ -114,208 +154,304 @@ for mode = ["drop","clip"]
         nnz([fe.Points.Note]=="AttachmentNode"), nnz(endsWith([fe.Points.Name],"_LE")), ...
         numel(fe.AeroSurfaces), sum([fe.AeroSurfaces.Area]));
 end
-```
 
-The pass criterion for T2 is `S_half` ≈ 110.5 m², i.e. the centre-body panels exist and the planform is right. With `"drop"`, the centre-body LE count is expected to be well below the hub count.
+%% T3 — A1: rigid modes dropped from the flutter basis
+%  Run any free-free SOL145 with defaults and open Source/flutter.bdf:
+%  "PARAM LFREQFL 0.01" is present, and the f06 flutter summary has no zero-frequency roots.
+```
 
 ---
 
-## 3. Target aircraft: A320-class BWB baseline
+## 4. Target aircraft: A320-class BWB baseline
 
-### 3.1 Top-level targets (gemini plan, Tables 1–3)
+### 4.1 Top level (gemini plan)
 
-| Quantity | Value | Note |
-|---|---|---|
-| Span b | 35.8 m | ICAO Code C (A320neo) |
-| Planform area S | ≈ 221 m² (inner 141 / outer 80) | A320's 122.4 m² cannot hold the cabin (volumetric paradox) |
-| AR total / outer | 5.80 / 6.84 | |
-| MTOM / OEW / max payload / design fuel | 79 000 / 41 200 / 20 000 / 17 800 kg | MTOM = OEW + payload + fuel |
-| Cruise | M 0.78, FL390 (ρ = 0.316 kg/m³, V = 230 m/s, q = 8.38 kPa) | **C_L(MTOM) = 0.42**, which is high for a BWB; at FL350 it is ≈ 0.35. Treat the cruise altitude as a parameter. |
-| Lift share target | centre body ≈ 38 %, outer ≈ 62 % | Needs reflex camber (§7.2) |
-| Cabin ΔP | 8.6 psi = 59.3 kPa. **1.33P = 78.9 kPa limit** (Gern), 118 kPa ultimate | Joseph uses 2P; both are options |
+| Quantity | Value |
+|---|---|
+| Span / area / AR | 35.8 m / ≈ 221 m² (inner 141, outer 80) / 5.80 (outer 6.84) |
+| MTOM / OEW / max payload / design fuel | 79 000 / 41 200 / 20 000 / 17 800 kg |
+| Mass cases | **MTOM** 79.0 t; **MZFW** 61.2 t; **OEW + 2 t reserve** 43.2 t |
+| Cruise | M 0.78, FL390 (ρ 0.316, V 230 m/s, q 8.38 kPa); C_L(MTOM) = 0.42, ≈ 0.35 at FL350 |
+| Envelope (A320-like) | V_C 350 KEAS / M_C 0.82; **V_D 381 KEAS / M_D 0.89**; clearance to **1.15·V_D ≈ 225 m/s EAS** |
 
-### 3.2 Derived half-planform (x aft, y starboard, z up; metres)
-
-These values satisfy the gemini areas and spans to within 1 %.
+### 4.2 Half-planform (x aft, y starboard, z up; metres)
 
 | Station | y | Chord | x_LE | x_TE | t/c | Role |
 |---|---|---|---|---|---|---|
 | 0 | 0.0 | 17.00 | 0.00 | 17.00 | 0.17 | centreline (symmetry plane) |
-| 1 | 4.0 | 10.00 | 7.00 | 17.00 | 0.17 | **cabin side wall** (= W_f/2) |
-| 2 | 6.2 | 5.00 | 10.85 | 15.85 | 0.14 | **kink**: end of mid section |
+| 1 | 4.0 | 10.00 | 7.00 | 17.00 | 0.17 | cabin side wall |
+| 2 | 6.2 | 5.00 | 10.85 | 15.85 | 0.14 | kink |
 | 3 | 17.9 | 1.84 | 18.16 | 20.00 | 0.11 | tip |
 
-* LE sweep: 60.26° (centre body and transition), 32° (outer); c/4 sweep of the outer wing is 29.1°.
-  TE sweep: 0°, −27.6° (forward-swept transition), 19.5°.
-* Areas per side: 54.0 + 16.5 (inner, = 70.5) and 40.0 (outer). **S = 221.0 m², AR = 5.80**, AR_ext = 6.84.
-* MAC = 9.23 m, x_LE,MAC = 7.91 m, y_MAC = 5.67 m. Estimated a.c. ≈ 10.2 m; initial CG target 9.9–10.1 m
-  (to be updated from the rigid SOL144 neutral point).
-* Eta mapping for one `baff.Wing` running from centreline to tip: `eta = y/17.9`, so the stations are `[0 0.2235 0.3464 1]`.
-* Beam line (box mid-chord): `BeamLoc = [0.544 0.500 0.375 0.375]`. Wing `Offset = [9.25;0;0]`, `A = ads.util.rotz(90)`.
+* LE sweep 60.26°/60.26°/32°; TE sweep 0°/−27.6°/19.5°; outer-wing c/4 sweep 29.1°.
+* MAC 9.23 m, x_LE,MAC 7.91 m, y_MAC 5.67 m. Estimated a.c. ≈ 10.2 m; the NP is computed in §10.2.
+* One `baff.Wing` from centreline to tip: `eta = y/17.9` gives stations `[0 0.2235 0.3464 1]`;
+  `BeamLoc = [0.544 0.500 0.375 0.375]` (box mid-chord); `Offset = [9.25;0;0]`; `A = ads.util.rotz(90)`.
 
-### 3.3 Pressurised cabin ("home plate") and structural lines
+### 4.3 Payload region and centre-body walls (stiffness)
 
-| Item | Value |
-|---|---|
-| Cabin width W_f | 8.0 m (side walls at y = ±4.0) |
-| Home-plate apex (front bulkhead at centreline) | x = 3.0 m. The cockpit sits ahead of it and is lumped as 907 kg (2 000 lb, Gern). |
-| Front-bulkhead corner at the side wall | x = 7.0 + 0.15·10 = 8.5 m, giving θ_CB = 54° (Joseph definition) |
-| Rear bulkhead (straight) | x = 15.5 m, giving XL_p = 12.5 m and XL_w = 7.0 m |
-| **Cabin floor area** | **78 m²** (0.52 m²/pax at 150 pax: high-density single class; this is **tight**) |
-| Max cabin depth | 0.17·17 = 2.89 m at the centreline, ≈ 1.7 m at the side wall (packaging to be checked in OpenVSP) |
-| Mid-section spars | from (8.5, 15.5) at y = 4.0 to 12.5 %/62.5 % at the kink: x = 11.475 / 13.975 |
-| Outer-wing spars | 12.5 % / 62.5 % chord (Gern) |
-| Joseph parameters | A_CB = 840 ft², FR = 0.64, θ_CB = 54°, SR = 0.223 (**below the MER's 1 750 ft² calibration range, so treat it as extrapolation**) |
-| Weight cross-checks | Joseph MER ×1.06×1.2 ≈ **5.1 t** cabin structure (without floors). Bradley with K_s = 1 gives 1.36 t, and the Ikeda scale factor K_s ≈ 5.7 gives ≈ 7.7 t. The target band after sizing is **~5–8 t**. |
+* **Payload region** (home plate): width 8.0 m (side walls at y = ±4.0), front apex x = 3.0,
+  front corner x = 8.5 at the side wall, straight rear bulkhead x = 15.5. Area 78 m², so the
+  payload areal density at MTOM is 20 000/78 ≈ **256 kg/m²** before bias.
+* Mid-section spars: (8.5, 15.5) at y = 4.0 → 12.5 %/62.5 % at the kink (11.475, 13.975).
+  Outer-wing spars at 12.5 %/62.5 %.
+* **Bay cases** (they change the centre-body bending and torsion stiffness, and hence the body modes in BFF):
 
-### 3.4 The three structural cases (Gern Fig 8)
+| Case | Bays | Internal walls (y > 0) | Expected (Gern) |
+|---|---|---|---|
+| C1 | 1 | none | most flexible centre body |
+| C2 | 3 | 1.333 | recommended below 270 pax |
+| C3 | 5 | 0.80, 2.40 | stiffest centre body; small mass penalty |
 
-| Case | Bays | Internal walls (half model, y > 0) | Bay width | Expected behaviour (Gern/Joseph) |
-|---|---|---|---|---|
-| **C1** | 1 | none, only the side wall at 4.0 | 8.0 m | Fast weight estimate. **Pressure deflections unrealistic**, and displacement constraints cannot be used. |
-| **C2** | 3 | y = 1.333 | 2.667 m | **Recommended for < 270 pax.** Significant displacement relief. |
-| **C3** | 5 | y = 0.80, 2.40 | 1.60 m | At this size, little or no mass benefit over 3-bay once fully stressed (Gern Fig 22, Joseph). |
+### 4.4 Mass items (half model)
 
-Odd bay counts put a bay (not a wall) on the centreline, which is why 4-bay is excluded.
-
-### 3.5 Mass items (per half model unless noted)
-
-| Item | Mass | Placement |
+| Item | Half-model value | Model |
 |---|---|---|
-| Primary structure | from the FE model (ρ·t·A + NSM) | shells or beams |
-| Engines (2 × LEAP-1A-class, installed) | 4 000 kg each; half model: 1 × 4 000 | x ≈ 16.0, y = 2.5, z = +1.8 m (over the aft body) |
-| Cockpit and nose | 907 kg total, so 453.5 on the symmetry plane | x ≈ 2.0 |
-| Payload (MTOM case) | 20 000 total, 10 000 per half | grid of CONM2 per bay × row at floor height, attached with RBE3 |
-| Fuel | 17 800 total, 8 900 per half: outer box ≈ 5.3 t (usable ≈ 6.5–7 m³), mid-section box ≈ 3.6 t | recomputed from box volume by `ads.bwb.fuelVolume` *(new)* |
-| Systems, furnishing, secondary structure | `OEW/2 − structure − engine − cockpit` | smeared NSM (PSHELL NSM, or baff distributed mass on the beam path) |
+| Structure | from FE | shells (ρ·t·A) or beams (ρ·A + distributed non-beam mass) |
+| Engine | 4 000 kg at (16.0, 2.5, 1.8); pylon with pitch frequency 3 Hz | CONM2 on a CBUSH/beam pylon |
+| Cockpit | 453.5 kg at (2.0, 0, 0) | CONM2 on the symmetry plane |
+| Payload | `PayloadFraction` × 10 000 kg, areal density over the payload region | PSHELL **NSM** on the centre-body lower skin (shell); lumped grid (beam) |
+| Fuel | OW box ≤ 5.3 t, MS box ≤ 3.6 t, × fill fraction | NSM on tank lower skins (shell); baff distributed mass (beam) |
+| Systems / secondary | `OEW/2 − structure − engine − cockpit` | area-weighted NSM over all skins |
 
 ---
 
-## 4. Architecture of `bwb2fe`
+## 5. Architecture
 
-### 4.1 Where it lives
-
-`bwb2fe` builds a BAFF model and then **reuses** `ads.baff.baff2fe`. In the shell path this goes through `wing2fe → shell2fe`; in the beam path through `wing2fe → beam2fe`. BWB-specific pre- and post-processing (mesher, section reduction, pressure, symmetry, mass budget) goes in a new package:
+### 5.1 Files
 
 ```
-ads/tbx/+ads/+bwb/                (new package)
-  BWBGeometry.m        planform, cabin home-plate, spars, bays; A320Class(nBays)
-  BWBStructure.m       materials (MAT1/MAT8), gauges per region tag, PRSEUS 12I/T^3, NSM
-  BWBMass.m            payload, fuel, engines, cockpit, OEW target, CG target
-  BWBOpts.m            Shell, BeamModel, Symmetry, mesh and aero density, spline mode, load options
-  bwb2fe.m             entry point  -> [fe, info]
-  buildBaff.m          geometry -> baff.Model (one baff.Wing + spine beams + masses + control surfaces)
-  meshShellStation.m   structured CQUAD4 mesher -> baff.station.ShellStation.ShellStation
-  boxCondensation.m    thin-walled multi-cell section -> A, Iyy, Izz, J (beam reduction)
-  spineSections.m      longitudinal multi-cell sections across the bays (cruciform beam path)
-  identifyBeamFromShell.m   shell-calibrated EI/GJ per hub segment (SOL101 unit loads)
-  addSymmetryBCs.m     SPC on y = 0 independent grids (246 sym / 135 antisym)
-  addCabinPressure.m   ads.fe.Pressure on cabin skins, bulkheads and side walls (by shell Label)
-  setPanelDensity.m    per-panel box size (centre body vs outer wing)
-  massBudget.m         NSM top-up to OEW, CG/inertia report, SUPORT/CoM node
-  fuelVolume.m         usable box volume per region
-  liftShare.m          SOL144 post-processing: centre-body vs outer-wing lift
-ads/Examples/
-  BWB_A320_build_example.m        build, draw, export (all six models)
-  BWB_A320_sol103_example.m       free-free modes, symmetric and antisymmetric
-  BWB_A320_sol144_example.m       1 g / 2.5 g / -1 g trim, lift share
-  BWB_A320_sol145_example.m       flutter, including body-freedom
-  BWB_A320_pressure_example.m     SOL101 1.33P with inertia relief (shell only)
-  BWB_A320_bay_study.m            C1/C2/C3 x shell/beam matrix -> tables and plots
-ads/tests/bwb2feTest.m            parameterised nBays x Shell (+ "Nastran"-tagged runs)
+ads/tbx/+ads/+bwb/                       (new package)
+  BWBGeometry.m        planform, payload region, spars, bays; A320Class(nBays)
+  BWBStructure.m       materials, gauges per region tag, PRSEUS 12I/T^3, stiffness scaling
+  BWBMass.m            mass cases, distributed payload, fuel tanks, engines, CG/SM target
+  BWBOpts.m            model form, mesh, aero, stability settings
+  bwb2fe.m             entry point -> [fe, info]
+  buildBaff.m          geometry -> baff.Model (one baff.Wing [+ spine] + masses + control surfaces)
+  meshShellStation.m   structured CQUAD4 mesher -> ShellStation
+  boxCondensation.m    thin-walled multi-cell section properties (beam reduction)
+  spineSection.m       longitudinal multi-cell section across the bays
+  identifyBeamFromShell.m  shell-calibrated EI/GJ per hub segment
+  addSymmetryBCs.m     SPC 246 (sym) / 135 (antisym) on independent y = 0 grids
+  applyDistributedMass.m   payload / fuel / systems as NSM (shell) or lumped grid (beam)
+  massBudget.m         OEW top-up, CG targeting (payload bias), CoM/SUPORT grid, report
+  neutralPoint.m       NP from two SOL144 runs (rigid or flexible)
+  matchedPoints.m      EAS sweep -> (V, rho, M) per altitude
+  findInstability.m    damping zero-crossings, classification (BFF / flutter / divergence)
+  stabilitySweep.m     loops: altitude x mass case x SM x stiffness scale -> boundary table
+  liftShare.m          centre-body vs outer-wing lift
+ads/tbx/+ads/+aeroelastic/               (new package, model-independent)
+  readGAF.m            OP4 -> Mhh, Bhh, Khh, Qhh(k) at each Mach
+  rogerRFA.m           rational function approximation
+  stateSpace.m         rigid + elastic + aero-lag state-space at (V, rho)
+  rootLocus.m          eigenvalues vs V with root tracking
+ads/Examples/BWB_A320_{build,sol103,np_sol144,bff_sol145,statespace,gust_sol146,bay_study}.m
+ads/tests/bwb2feTest.m, tests/aeroelasticTest.m
 ```
 
-### 4.2 Data flow
+### 5.2 Data flow
 
 ```
 BWBGeometry ─┐
-BWBStructure ├─> buildBaff ──> baff.Model ──> ads.baff.baff2fe ──> fe (ads.fe.Component)
-BWBMass ─────┤      │ Shell=true : Wing.FromLETESweep_Shell + meshShellStation   (shell2fe)
-BWBOpts ─────┘      │ Shell=false: Wing.FromLETESweep + boxCondensation (+spine) (beam2fe)
-                    │ + baff.ControlSurface (elevons, aileron) + baff.Mass (payload/fuel/engine/cockpit)
-                    ▼
-      post: addSymmetryBCs → [addCabinPressure] → setPanelDensity → massBudget → AeroSettings
-                    ▼
-      ads.nast.Sol101 / Sol103 / Sol144 / Sol145 (existing classes, small edits in §9)
+BWBStructure ├─> buildBaff ─> baff.Model ─> ads.baff.baff2fe ─> fe
+BWBMass ─────┤   Shell: FromLETESweep_Shell + meshShellStation (-> shell2fe)
+BWBOpts ─────┘   Beam : FromLETESweep + boxCondensation (+ spine)  (-> beam2fe)
+                                   │
+   addSymmetryBCs → applyDistributedMass → massBudget (CG/SM) → setPanelDensity → AeroSettings
+                                   │
+   SOL103 free-free → SOL144 NP/trim → SOL145 PKNL matched points (sym/antisym)
+                                   │                         │
+                         findInstability (BFF…)     GAF export → RFA → state-space → root loci / time response
 ```
 
-**Why one `baff.Wing` from the centreline to the tip?**
-`element2fe` joins a child to its parent with **one** `RigidBar` between the closest points. That is fine for masses and pylons but wrong between shell segments: the side-wall joint must be continuous. A single wing avoids the problem:
+Why **one `baff.Wing` from centreline to tip**: `element2fe` joins a child to its parent with a single
+`RigidBar`, which is wrong between shell segments. With one wing, its `ShellStation` holds the whole
+connected mesh and its `AeroStations` put CAERO1 panels on the centre body automatically.
 
-* its `ShellStation` holds the whole connected mesh (cabin, mid section and outer box), and
-* its `AeroStations` put `CAERO1` panels on the centre body automatically, which is the key aero requirement.
+### 5.3 Input classes (sketch)
 
-### 4.3 Entry point (sketch)
+```matlab
+classdef BWBGeometry
+    %BWBGEOMETRY Half-model planform (x aft, y starboard, z up) [m, deg]
+    properties
+        Y     (1,:) double = [0 4.0 6.2 17.9];
+        Chord (1,:) double = [17.0 10.0 5.0 1.84];
+        XLE   (1,:) double = [0 7.0 10.85 18.16];
+        TC    (1,:) double = [0.17 0.17 0.14 0.11];
+        Twist (1,:) double = [0 0 0 -3];
+        BeamLoc (1,:) double = [0.544 0.500 0.375 0.375];
+        PayloadWidth = 8.0;  PayloadApexX = 3.0;  RearBulkheadX = 15.5;  FrontCornerPc = 0.15;
+        FrontSparPc = 0.125;  RearSparPc = 0.625;
+        NBays (1,1) double {mustBeMember(NBays,[1 3 5])} = 3;
+        AirfoilCB = baff.Airfoil.NACA(0,0,0.17);  AirfoilOW = baff.Airfoil.NACA(0,0,0.11);  % placeholders
+    end
+    properties (Dependent)
+        HalfSpan, Area, MAC, XLEMAC, WallY, LESweep, TESweep
+    end
+    methods
+        function b = get.HalfSpan(obj),  b = obj.Y(end);  end
+        function S = get.Area(obj),      S = 2*trapz(obj.Y,obj.Chord);  end
+        function c = get.MAC(obj)
+            y = linspace(0,obj.HalfSpan,2001);  cc = interp1(obj.Y,obj.Chord,y);
+            c = trapz(y,cc.^2)/trapz(y,cc);
+        end
+        function x = get.XLEMAC(obj)
+            y = linspace(0,obj.HalfSpan,2001);  cc = interp1(obj.Y,obj.Chord,y);
+            x = trapz(y,cc.*interp1(obj.Y,obj.XLE,y))/trapz(y,cc);
+        end
+        function y = get.WallY(obj)
+            w = obj.PayloadWidth/obj.NBays;
+            y = -obj.PayloadWidth/2 + w*(1:obj.NBays-1);  y = y(y > 1e-9);
+        end
+        function s = get.LESweep(obj), s = [atand(diff(obj.XLE)./diff(obj.Y)), 0];  end
+        function s = get.TESweep(obj), s = [atand(diff(obj.XLE+obj.Chord)./diff(obj.Y)), 0];  end
+        function [xf,xr] = BoxLines(obj,y)
+            %front/rear structural lines: payload region -> mid section -> outer spars
+            yc = obj.PayloadWidth/2;  xc = interp1(obj.Y,obj.XLE,yc) + obj.FrontCornerPc*interp1(obj.Y,obj.Chord,yc);
+            xl = @(yy) interp1(obj.Y,obj.XLE,yy);  cl = @(yy) interp1(obj.Y,obj.Chord,yy);
+            if y <= yc
+                xf = obj.PayloadApexX + (xc-obj.PayloadApexX)*y/yc;   xr = obj.RearBulkheadX;
+            elseif y <= obj.Y(3)
+                t  = (y-yc)/(obj.Y(3)-yc);
+                xf = xc + t*(xl(obj.Y(3)) + obj.FrontSparPc*cl(obj.Y(3)) - xc);
+                xr = obj.RearBulkheadX + t*(xl(obj.Y(3)) + obj.RearSparPc*cl(obj.Y(3)) - obj.RearBulkheadX);
+            else
+                xf = xl(y) + obj.FrontSparPc*cl(y);   xr = xl(y) + obj.RearSparPc*cl(y);
+            end
+        end
+        function [zu,zl] = Surface(obj,x,y)
+            %OML heights; baff.Airfoil Ys are for unit thickness (NACA: max half-thickness 0.5), so
+            %scale by t/c*c. Use symmetric sections here: camber inside Ys would also be scaled by t/c,
+            %so aerodynamic camber goes in AeroSurface.CamberFcn instead.
+            c = interp1(obj.Y,obj.Chord,y);  xi = (x - interp1(obj.Y,obj.XLE,y))/c;
+            tc = interp1(obj.Y,obj.TC,y);   af = ads.util.tern(y <= obj.Y(3),obj.AirfoilCB,obj.AirfoilOW);
+            zu = c*tc*interp1(af.Etas,af.Ys(:,1),xi,'pchip');
+            zl = c*tc*interp1(af.Etas,af.Ys(:,2),xi,'pchip');
+        end
+        function r = Region(obj,y)
+            if y < obj.PayloadWidth/2, r = "CB"; elseif y < obj.Y(3), r = "MS"; else, r = "OW"; end
+        end
+    end
+    methods (Static)
+        function obj = A320Class(nBays)
+            obj = ads.bwb.BWBGeometry();  obj.NBays = nBays;
+        end
+    end
+end
+```
+
+```matlab
+classdef BWBMass
+    properties
+        MTOM = 79000;  OEW = 41200;  PayloadMax = 20000;  FuelDesign = 17800;  Reserve = 2000;
+        Case string {mustBeMember(Case,["MTOM","MZFW","OEW","Custom"])} = "MTOM";
+        PayloadFraction = 1;  FuelFraction = 1;           % used when Case == "Custom"
+        PayloadBias = 0;                                    % NSM(x) = n0*(1 + PayloadBias*(x-xm)/L)
+        FuelTanks = struct('Name',{"OW","MS"},'EtaRange',{[0.3464 0.86],[0.2235 0.3464]}, ...
+                           'Capacity',{5300,3600});         % per half [kg]
+        Engine  = struct('Mass',4000,'X',[16.0;2.5;1.8],'PylonFreq',3.0);
+        Cockpit = struct('Mass',907,'X',[2.0;0;0]);
+        CGTarget string {mustBeMember(CGTarget,["StaticMargin","X","None"])} = "StaticMargin";
+        StaticMargin = 0.05;  XCG = 10.0;  IyyTarget = NaN;
+        XNP = NaN;                                          % neutral point [m]; NaN -> a.c. estimate
+    end
+    methods
+        function [mp,mf] = CaseFractions(obj)
+            switch obj.Case
+                case "MTOM", mp = 1; mf = 1;
+                case "MZFW", mp = 1; mf = 0;
+                case "OEW",  mp = 0; mf = obj.Reserve/obj.FuelDesign;
+                otherwise,   mp = obj.PayloadFraction; mf = obj.FuelFraction;
+            end
+        end
+    end
+    methods (Static)
+        function obj = A320Class(), obj = ads.bwb.BWBMass(); end
+    end
+end
+```
+
+```matlab
+classdef BWBOpts
+    properties
+        % model form
+        Shell logical = true;
+        BeamModel  string {mustBeMember(BeamModel,["stick","cruciform"])} = "cruciform";
+        BeamSource string {mustBeMember(BeamSource,["analytic","shell"])} = "analytic";
+        Symmetry   string {mustBeMember(Symmetry,["sym","antisym","none"])} = "sym";
+        % structural mesh / stiffness
+        NChordStruct = 10;  NDepthStruct = 3;  SpanElemCB = 0.5;  SpanElemOW = 0.35;  RibPitch = 0.7;
+        StiffnessScale = struct('CB',1,'MS',1,'OW',1);     % E,G (shell) or EI,GJ (beam); mass unchanged
+        % aero
+        AeroBoxSize = 0.5;  AeroBoxAR = 1.5;  SplineMode string = "skin";
+        CamberCB = 0.05;  ReflexXi = 0.75;
+        % stability
+        ReducedFreqs = [0.001 0.005 0.01 0.02 0.035 0.05 0.075 0.1 0.15 0.2 0.3 0.45 0.65 1.0 1.5];
+        MachList = [0.2 0.5 0.7 0.78];
+        NModes = 40;  FMax = 30;  KeepRigidBodyModes logical = true;  StructuralDamping = 0;
+        % optional loads
+        IncludePressure logical = false;  CabinDeltaP = 59.3e3;  PressureFactor = 1.33;
+    end
+    methods
+        function obj = BWBOpts(opts)
+            arguments, opts.?ads.bwb.BWBOpts, end
+            for p = string(fieldnames(opts))', obj.(p) = opts.(p); end
+        end
+    end
+end
+```
+
+### 5.4 Entry point
 
 ```matlab
 function [fe,info] = bwb2fe(geom,str,mass,opts)
-%BWB2FE Nastran FE + DLM model of a BWB (half model by default).
-%   opts.Shell = true  -> PSHELL wingbox via shell2fe
-%   opts.Shell = false -> beam reduction via beam2fe (stick or cruciform)
+%BWB2FE Nastran FE + DLM model of a free-flying BWB (half model by default).
 arguments
     geom ads.bwb.BWBGeometry  = ads.bwb.BWBGeometry.A320Class(3)
     str  ads.bwb.BWBStructure = ads.bwb.BWBStructure.PRSEUS()
     mass ads.bwb.BWBMass      = ads.bwb.BWBMass.A320Class()
     opts ads.bwb.BWBOpts      = ads.bwb.BWBOpts()
 end
-geom.validate();                                          % Y(2)==CabinWidth/2, areas, wall positions
-model = ads.bwb.buildBaff(geom,str,mass,opts);
-bOpts = ads.baff.BaffOpts(SplitBeamsAtChildren=false, LeTeEdgeMode="clip", ...
-                          AddEndRibs=true, ShellSplineMode=opts.SplineMode);   % ShellSplineMode (new)
+model = ads.bwb.buildBaff(geom,str,mass,opts);        % wing (+spine), engine/pylon, cockpit, control surfaces
+bOpts = ads.baff.BaffOpts(SplitBeamsAtChildren=false, LeTeEdgeMode="clip", AddEndRibs=true, ...
+                          ShellSplineMode=opts.SplineMode);          % ShellSplineMode (new)
 fe = ads.baff.baff2fe(model,bOpts);
 ads.bwb.addSymmetryBCs(fe,opts.Symmetry);
-if opts.Shell && opts.IncludePressure
-    ads.bwb.addCabinPressure(fe,opts.CabinDeltaP*opts.PressureFactor);
-end
+ads.bwb.applyDistributedMass(fe,geom,mass,opts);      % payload + fuel + systems (NSM or lumped)
+info = ads.bwb.massBudget(fe,geom,mass,opts);         % OEW top-up, CG targeting, CoM grid, report
 ads.bwb.setPanelDensity(fe,opts.AeroBoxSize,opts.AeroBoxAR);
-info = ads.bwb.massBudget(fe,geom,mass,opts);             % NSM top-up, CG, SUPORT node -> info.CoM
 symxz = ads.util.tern(opts.Symmetry=="sym",1,ads.util.tern(opts.Symmetry=="antisym",-1,0));
-fe.AeroSettings(1) = ads.fe.AeroSettings(geom.MAC,1.225,2*geom.HalfSpan,geom.Area/2, ...
-                                         SymXZ=symxz);    % SymXZ as -1/0/1 (F15), REFS = half (F16)
+fe.AeroSettings(1) = ads.fe.AeroSettings(geom.MAC,1.225,2*geom.HalfSpan,geom.Area/2,SymXZ=symxz);
 info.Geometry = geom;  info.Opts = opts;
 end
 ```
 
 ---
 
-## 5. Shell path (`Shell = true`)
+## 6. Shell path (`Shell = true`)
 
-### 5.1 Structured mesher → `ShellStation` (feeds the existing `shell2fe`)
+### 6.1 Structured mesher → `ShellStation`
 
-The mesh uses parametric coordinates per spanwise station y_k:
-
-* ξ ∈ [0,1] from the **front line** (home-plate front bulkhead / front spar) to the **rear line** (rear bulkhead / rear spar);
-* ζ ∈ [0,1] down the webs.
-
-Every wall lies on a mesh line: symmetry plane, internal walls, side wall, kink, ribs and tip are all included in the `y_k` set. The whole structure is therefore `CQUAD4`, with no `CTRIA3`:
-
-* cabin front and rear bulkheads are the ξ = 0/1 webs,
-* the side wall and internal walls are "ribs" at constant y,
-* the mid-section and outer spars are the same webs continued.
+Every wall lies on a mesh line (symmetry plane, internal walls, side wall, kink, ribs, tip), so the
+whole mesh is `CQUAD4`.
 
 ```matlab
 function st = meshShellStation(geom,str,opts,wing)
-%MESHSHELLSTATION Structured CQUAD4 mesh of cabin + mid section + outer box,
-% returned as a baff ShellStation in the wing's LOCAL frame.
-yS    = geom.StructStations(opts);            % sorted global y: 0, walls, Wf/2, kink, ribs, CS breaks, tip
-isRib = geom.IsRibStation(yS,opts);           % walls, side wall, kink, rib pitch, tip (NOT y = 0)
-xi    = linspace(0,1,opts.NChordStruct+1);    % default 10 elements chordwise
-zeta  = linspace(0,1,opts.NDepthStruct+1);    % default 3 elements through the web depth
+%MESHSHELLSTATION Structured CQUAD4 mesh (centre body + mid section + outer box) in wing LOCAL frame.
+yS    = structStations(geom,opts);            % sorted y: 0, walls, side wall, kink, ribs, CS breaks, tip
+isRib = isRibStation(geom,yS,opts);           % walls, side wall, kink, rib pitch, tip (not y = 0)
+xi = linspace(0,1,opts.NChordStruct+1);  zeta = linspace(0,1,opts.NDepthStruct+1);
 K = numel(yS);  J = numel(xi);  L = numel(zeta);
-
-Xg = zeros(0,3);  nN = 0;                     % global node store
-U = zeros(K,J);  Lo = zeros(K,J);  F = zeros(K,L);  R = zeros(K,L);  RibG = cell(K,1);
+Xg = zeros(0,3);  nN = 0;  U = zeros(K,J);  Lo = zeros(K,J);  F = zeros(K,L);  R = zeros(K,L);  RibG = cell(K,1);
 for k = 1:K
-    [xf,xr]  = geom.BoxLines(yS(k));          % front / rear structural lines at this y
-    x        = xf + xi*(xr-xf);
-    [zu,zl]  = geom.Surface(x,yS(k));         % OML from airfoil * t/c * chord
+    [xf,xr] = geom.BoxLines(yS(k));   x = xf + xi*(xr-xf);   [zu,zl] = geom.Surface(x,yS(k));
     [Xg,nN,U(k,:)]  = addNodes(Xg,nN,[x(:), repmat(yS(k),J,1), zu(:)]);
     [Xg,nN,Lo(k,:)] = addNodes(Xg,nN,[x(:), repmat(yS(k),J,1), zl(:)]);
     zf = zu(1) + zeta(2:L-1)*(zl(1)-zu(1));   zr = zu(J) + zeta(2:L-1)*(zl(J)-zu(J));
     [Xg,nN,fi] = addNodes(Xg,nN,[repmat([x(1) yS(k)],L-2,1), zf(:)]);
     [Xg,nN,ri] = addNodes(Xg,nN,[repmat([x(J) yS(k)],L-2,1), zr(:)]);
     F(k,:) = [U(k,1) fi Lo(k,1)];   R(k,:) = [U(k,J) ri Lo(k,J)];
-    if isRib(k)                               % interior grid of the rib / wall plane
+    if isRib(k)
         G = zeros(J,L);  G(:,1) = U(k,:)';  G(:,L) = Lo(k,:)';  G(1,:) = F(k,:);  G(J,:) = R(k,:);
         for j = 2:J-1
             z = zu(j) + zeta(2:L-1)*(zl(j)-zu(j));
@@ -324,41 +460,35 @@ for k = 1:K
         RibG{k} = G;
     end
 end
-
-% ---- elements (node order gives OUTWARD normals: needed for PLOAD4) ----
-Q = zeros(0,4);  T = strings(0,1);
+Q = zeros(0,4);  T = strings(0,1);               % node order -> outward normals
 for k = 1:K-1
-    reg = geom.Region((yS(k)+yS(k+1))/2);     % "CB" | "MS" | "OW"
+    reg = geom.Region((yS(k)+yS(k+1))/2);
     for j = 1:J-1
-        [Q,T] = push(Q,T,[U(k,j)  U(k,j+1)  U(k+1,j+1)  U(k+1,j)],  reg+"_UpperSkin");  % +z
-        [Q,T] = push(Q,T,[Lo(k,j) Lo(k+1,j) Lo(k+1,j+1) Lo(k,j+1)], reg+"_LowerSkin");  % -z
+        [Q,T] = push(Q,T,[U(k,j)  U(k,j+1)  U(k+1,j+1)  U(k+1,j)],  reg+"_UpperSkin");
+        [Q,T] = push(Q,T,[Lo(k,j) Lo(k+1,j) Lo(k+1,j+1) Lo(k,j+1)], reg+"_LowerSkin");
     end
     for l = 1:L-1
-        [Q,T] = push(Q,T,[F(k,l) F(k+1,l) F(k+1,l+1) F(k,l+1)], reg+ads.util.tern(reg=="CB","_FrontBulkhead","_FrontSpar")); % -x
-        [Q,T] = push(Q,T,[R(k,l) R(k,l+1) R(k+1,l+1) R(k+1,l)], reg+ads.util.tern(reg=="CB","_RearBulkhead","_RearSpar"));   % +x
+        [Q,T] = push(Q,T,[F(k,l) F(k+1,l) F(k+1,l+1) F(k,l+1)], reg+"_FrontSpar");
+        [Q,T] = push(Q,T,[R(k,l) R(k,l+1) R(k+1,l+1) R(k+1,l)], reg+"_RearSpar");
     end
 end
 for k = find(isRib(:)')
-    G = RibG{k};  tag = geom.RibTag(yS(k));   % "CB_InternalWall" | "CB_SideWall" | "MS_KinkRib" | "OW_Rib" | ...
+    G = RibG{k};  tag = ribTag(geom,yS(k));      % CB_InternalWall | CB_SideWall | MS_KinkRib | OW_Rib ...
     for j = 1:J-1, for l = 1:L-1
-        [Q,T] = push(Q,T,[G(j,l) G(j+1,l) G(j+1,l+1) G(j,l+1)], tag);   % +y (side wall outward)
+        [Q,T] = push(Q,T,[G(j,l) G(j+1,l) G(j+1,l+1) G(j,l+1)], tag);
     end, end
 end
-
-% ---- to the wing local frame and a baff ShellStation ----
-Xl = (wing.A.' * (Xg.' - wing.Offset(:))).';
+Xl = (wing.A.' * (Xg.' - wing.Offset(:))).';     % global -> wing local
 shells = baff.station.ShellStation.Shell.empty;
 for e = 1:size(Q,1)
-    p = str.Props(T(e));                      % gauge, baff.Material, BendRatio, NSM per tag
-    shells(end+1,1) = baff.station.ShellStation.Shell(Q(e,:)',p.Mat,p.t,"PSHELL",Tag=T(e)); %#ok<AGROW>
+    p = str.Props(T(e),opts.StiffnessScale);     % gauge, material (E,G scaled), BendRatio
+    shells(end+1,1) = baff.station.ShellStation.Shell(Q(e,:)',p.Mat,p.t,"PSHELL", ...
+                          Tag=T(e),BendRatio=p.BendRatio); %#ok<AGROW>
 end
-eta   = yS / geom.HalfSpan;                   % valid because EtaDir(1,:) == 1 (FromLETESweep, no dihedral)
-rings = arrayfun(@(k) [U(k,:), R(k,2:L-1), fliplr(Lo(k,:)), fliplr(F(k,2:L-1))], 1:K, 'UniformOutput',false);
-st = wing.Stations;                            % from FromLETESweep_Shell: keeps EtaDir / beam line
-st.Nodes = Xl;  st.Shell = shells;
-st.SecondaryEta   = eta;
-st.SecondaryNodes = packRings(rings);         % K blocks of equal rows, padded to multiples of 4 (F3)
-st.SplineNodes    = reshape(U.',[],1);        % (new property) upper-skin grids for "skin" splines
+rings = arrayfun(@(k) [U(k,:), R(k,2:L-1), fliplr(Lo(k,:)), fliplr(F(k,2:L-1))],1:K,'UniformOutput',false);
+st = wing.Stations;
+st.Nodes = Xl;  st.Shell = shells;  st.SecondaryEta = yS/geom.HalfSpan;   % EtaDir(1,:) == 1
+st.SecondaryNodes = packRings(rings);  st.SplineNodes = reshape(U.',[],1);
 end
 
 function [Xg,nN,idx] = addNodes(Xg,nN,P)
@@ -367,168 +497,754 @@ end
 function [Q,T] = push(Q,T,q,t)
 Q(end+1,:) = q;  T(end+1,1) = t;
 end
+function R = packRings(rings)
+n = numel(rings{1});  n4 = 4*ceil(n/4);  R = zeros(0,4);
+for k = 1:numel(rings)
+    r = rings{k};  r = [r, repmat(r(end),1,n4-n)];  R = [R; reshape(r,4,[]).']; %#ok<AGROW>
+end
+end
 ```
 
-With the default densities (10 chordwise × 3 deep; 0.5 m spanwise in the centre body and mid section, 0.35 m outboard; outer ribs about every 0.7 m) this gives **about 1.9 k CQUAD4**, comparable to Gern's 2.5–3.5 k. Element aspect ratio stays at or below ~4 at the tip.
+At the default densities this gives about 1.9 k CQUAD4 (Gern used 2.5–3.5 k), with element aspect
+ratio at or below ~4.
 
-### 5.2 Structural idealisation per tag (initial gauges before sizing)
+### 6.2 Properties per region tag
 
-| Tag | Material (PSHELL route) | t₀ [mm] | 12I/T³ | Pressure |
-|---|---|---|---|---|
-| `CB_UpperSkin`, `CB_LowerSkin` | PRSEUS smeared (QI IM7-8552: E = 56.1 GPa, G = 21.4 GPa, ν = 0.31, ρ = 1 578 kg/m³) | 6 | `BendRatio_PRSEUS` | yes (outward) |
-| `CB_FrontBulkhead`, `CB_RearBulkhead` | PRSEUS smeared | 6 | `BendRatio_PRSEUS` | yes |
-| `CB_SideWall` | PRSEUS smeared | 5 | `BendRatio_PRSEUS` | yes (+y, towards the unpressurised mid section) |
-| `CB_InternalWall` | simple composite panel (Joseph: ribs are not PRSEUS) | 4 | 1 | no (pressurised on both sides) |
-| `MS_*` skins, spars, ribs | CFRP QI | 5 / 5 / 3 | 1 | no |
-| `OW_*` skins, spars, ribs | CFRP QI | 8→3 / 6→3 / 3 (linear in y) | 1 | no |
+| Tag | Material (PSHELL) | t₀ [mm] | 12I/T³ |
+|---|---|---|---|
+| `CB_UpperSkin/LowerSkin/FrontSpar/RearSpar/SideWall` | PRSEUS smeared, QI IM7-8552: E 56.1 GPa, G 21.4 GPa, ν 0.31, ρ 1 578 | 6 (side wall 5) | `BendRatio_PRSEUS` |
+| `CB_InternalWall` | QI CFRP | 4 | 1 |
+| `MS_*` | QI CFRP | 5 / 5 / 3 | 1 |
+| `OW_*` | QI CFRP | skin 8→3, spar 6→3, rib 3 | 1 |
 
-* **PRSEUS (Gern §III.C).** Keep the membrane thickness `t_eff = (A_skin + A_stringer)/pitch` and set
-  `BendRatio = 12·I_panel/t_eff³`, where `I_panel` is the panel bending inertia per unit width. Use the
-  Velicki panel dimensions (Joseph Ref 12: stringer pitch 6 in, frame pitch 24 in).
-  Put this in `BWBStructure.PRSEUS()` as a function of the panel geometry, not as a magic number.
-* **PCOMP/MAT8 route (optional, Ph 7).** IM7-8552 tape: E1 = 146.9 GPa, E2 = 8.69 GPa, G12 = 5.16 GPa,
-  ν12 = 0.32 (Joseph Table 3). Joseph's `[45/-45/0/90/45/-45]s` layup gives E = 45.9 GPa and G = 26.9 GPa.
-* All primary structure uses the PRSEUS density of 0.057 lb/in³ (Gern §III.G). Non-optimum factor 1.2 (Joseph).
+* `BendRatio_PRSEUS = 12·I_panel/t_eff³` with `t_eff = (A_skin + A_str)/pitch`, from the Velicki
+  panel dimensions. Use 1.0 until those are set.
+* `StiffnessScale.(region)` multiplies E and G only, which leaves the mass unchanged.
 
-### 5.3 Boundary conditions, hubs, supports
-
-* **Symmetric half model.** SPC `246` on every *independent* structural grid with |y| < 1e-6
-  (antisymmetric: `135`). **Never SPC a grid that is dependent in an RBE2/RBE3** (the RBE3 hubs and
-  LE/TE bar ends); Nastran stops with a fatal error. So filter on grids that belong to shells:
+### 6.3 Boundary conditions
 
 ```matlab
 function addSymmetryBCs(fe,mode)
 if mode == "none", return, end
 dofs = ads.util.tern(mode=="sym",246,135);
-shellPts = unique([fe.Shells.G]);                          % independent structural grids only
-for p = shellPts(:)'
-    if abs(p.GlobalPos(2)) < 1e-6
+dep  = [[fe.RigidBodyElements.REFGRID], [fe.RigidBars.Point2]];   % dependent grids (RBE3 ref, RBE2 GM)
+for p = fe.Points(:)'
+    if abs(p.GlobalPos(2)) < 1e-6 && ~any(p == dep)               % handle identity comparison
         fe.Constraints(end+1) = ads.fe.Constraint(p,dofs);
     end
 end
 end
 ```
 
-* **Free-free** (SOL103/144/145): use the existing `CoM` constraint mechanism, but put it on the
-  **nearest independent structural grid to the CG** (a lower-skin node), not on an RBE3 reference.
-  Symmetric trim uses `DoFs=35` (plunge and pitch), as `Sol144.set_trim_steadyLevel` already does.
-* **SOL101 (pressure and unit loads):** use inertia relief `PARAM,INREL,-2`. This needs a `Params`
-  struct on `Sol101`, matching `Sol144`/`Sol145` (§9). Gern notes that ignoring inertia relief
-  over-predicts loads.
+Never SPC a grid that is dependent in an RBE2/RBE3 (hubs, LE/TE and mass-bar ends); Nastran stops
+with a fatal error. The free-free CoM/SUPORT grid is the nearest independent structural grid to the
+CG (§8.4).
 
-### 5.4 Cabin pressure (new `PLOAD4` + `ads.fe.Pressure`)
+---
+
+## 7. Beam path (`Shell = false`): wingbox reduction
+
+### 7.1 Multi-cell condensation
 
 ```matlab
-% Matran: tbx/+mni/+printing/+cards/PLOAD4.m (new) - P1 only (P2-P4 default to P1)
-classdef PLOAD4 < mni.printing.cards.BaseCard
-    properties
-        SID; EID; P;
+function sec = boxCondensation(x,zU,zL,tU,tL,tW)
+%BOXCONDENSATION thin-walled multi-cell section -> A, Iyy (int z^2), Izz (int x^2), J (Bredt-Batho)
+nw = numel(x);  nc = nw-1;  seg = zeros(0,5);
+for c = 1:nc
+    seg(end+1,:) = [x(c) zU(c) x(c+1) zU(c+1) tU(c)]; %#ok<AGROW>
+    seg(end+1,:) = [x(c) zL(c) x(c+1) zL(c+1) tL(c)]; %#ok<AGROW>
+end
+for w = 1:nw, seg(end+1,:) = [x(w) zL(w) x(w) zU(w) tW(w)]; end %#ok<AGROW>
+dx = seg(:,3)-seg(:,1);  dz = seg(:,4)-seg(:,2);  Aw = hypot(dx,dz).*seg(:,5);
+xm = (seg(:,1)+seg(:,3))/2;  zm = (seg(:,2)+seg(:,4))/2;
+A = sum(Aw);  xc = sum(Aw.*xm)/A;  zc = sum(Aw.*zm)/A;
+Iyy = sum(Aw.*((zm-zc).^2 + dz.^2/12));   Izz = sum(Aw.*((xm-xc).^2 + dx.^2/12));
+Acell = zeros(nc,1);  D = zeros(nc);
+for c = 1:nc
+    hL = zU(c)-zL(c);  hR = zU(c+1)-zL(c+1);   Acell(c) = 0.5*(x(c+1)-x(c))*(hL+hR);
+    D(c,c) = hypot(x(c+1)-x(c),zU(c+1)-zU(c))/tU(c) + hypot(x(c+1)-x(c),zL(c+1)-zL(c))/tL(c) ...
+           + hL/tW(c) + hR/tW(c+1);
+    if c > 1,  D(c,c-1) = -hL/tW(c);   end
+    if c < nc, D(c,c+1) = -hR/tW(c+1); end
+end
+q = D \ (2*Acell);   J = 2*sum(Acell.*q);           % single cell -> 4A^2/(oint ds/t)
+sec = struct('A',A,'Iyy',Iyy,'Izz',Izz,'J',J,'xc',xc,'zc',zc);
+end
+```
+
+Use in `buildBaff` when `Shell=false`:
+
+```matlab
+w = baff.Wing.FromLETESweep(b,geom.Chord(1),geom.Y/b,geom.LESweep,geom.TESweep, ...
+                            geom.BeamLoc,str.RefMat,ThicknessRatio=geom.TC);
+w.Stations = w.Stations.interpolate(beamEtas(geom,opts));
+for i = 1:w.Stations.N
+    y = w.Stations.Eta(i)*b;   [xw,tW,tU,tL] = str.SpanwiseSection(geom,y);   [zu,zl] = geom.Surface(xw,y);
+    s = ads.bwb.boxCondensation(xw,zu,zl,tU,tL,tW);
+    k = opts.StiffnessScale.(geom.Region(y));                          % stiffness only
+    w.Stations.A(i) = s.A;                                             % mass from rho*A (unscaled)
+    w.Stations.I(:,:,i) = k*diag([s.Iyy+s.Izz, s.Iyy, s.Izz]);
+    w.Stations.J(i) = k*s.J;
+end
+w.DistributeMass(str.NonBeamMass(geom),opts.NMassStations,"tag","bwb_nonbeam","Method","Regular");
+```
+
+### 7.2 Centreline spine (cruciform): the bay walls enter here
+
+The spine is two `baff.Beam` children of the wing at `eta=0`: one forward to x = 3.0 and one aft to
+x = 17.0. Each spine section is the cut across the payload width, with the side walls and internal
+walls as webs, so it has `NBays` cells. **Halve everything in the half model**, because the spine lies
+on the symmetry plane.
+
+```matlab
+function [A,I,J] = spineSection(geom,str,x)
+yw = [-geom.PayloadWidth/2, -fliplr(geom.WallY), geom.WallY, geom.PayloadWidth/2];
+yw = yw(arrayfun(@(y) x >= frontLineX(geom,abs(y)), yw));   % walls start behind the home-plate front
+zu = zeros(size(yw));  zl = zu;
+for k = 1:numel(yw), [zu(k),zl(k)] = geom.Surface(x,abs(yw(k))); end
+nc = numel(yw)-1;
+s = ads.bwb.boxCondensation(yw,zu,zl,str.t("CB_UpperSkin")*ones(1,nc),str.t("CB_LowerSkin")*ones(1,nc), ...
+                            str.WallThickness(yw));
+A = s.A/2;  I = diag([s.Iyy+s.Izz, s.Iyy, s.Izz])/2;  J = s.J/2;
+end
+```
+
+The centre-body `SPLINE4` sets include the spine nodes, which gives pitch-plane flexibility in the aero
+coupling. **Option B2 (Ph 7):** a full grillage built directly from `ads.fe` beams.
+
+### 7.3 Shell-calibrated beam
+
+Three SOL101 unit-load cases on the shell model, with the root hub clamped and no masses: tip normal
+force, tip torque about the beam axis, and tip chordwise force. These give the 3×3 compliance per unit
+length for each hub segment (bend–twist coupling included).
+
+```matlab
+for k = 1:nH-1
+    e1 = Xh(:,k+1)-Xh(:,k);  ds = norm(e1);  e1 = e1/ds;
+    e3 = cross(e1,chordDir(:,k));  e3 = e3/norm(e3);  e2 = cross(e3,e1);  Tk = [e1 e2 e3];
+    Xm = (Xh(:,k)+Xh(:,k+1))/2;  M = zeros(3);  Th = zeros(3);
+    for c = 1:3
+        M(:,c)  = Tk.'*(cross(Xh(:,end)-Xm,Fc(:,c)) + Mc(:,c));   % internal moment at the segment middle
+        Th(:,c) = Tk.'*(rot(:,k+1,c)-rot(:,k,c))/ds;              % twist rate and curvatures
     end
-    methods
-        function obj = PLOAD4(SID,EID,P)
-            arguments
-                SID (1,1) double; EID (1,1) double; P (1,1) double
+    C = Th/M;  Kseg = inv((C+C.')/2);
+    GJ(k) = Kseg(1,1);  EIflap(k) = Kseg(2,2);  EIchord(k) = Kseg(3,3);
+end
+```
+
+Set `BeamSource="shell"` to replace the analytic stations. Acceptance: analytic vs identified within
+±15 % outboard of the kink.
+
+---
+
+## 8. Mass, distributed payload and inertia
+
+### 8.1 Payload, fuel and systems as distributed mass
+
+**Shell path.** PSHELL NSM (kg/m²) on the lower-skin elements whose centroid is inside the payload
+polygon. Tank lower skins carry the fuel, and all skins carry the systems top-up.
+
+**Beam path.** The same areal density is sampled on a grid and lumped as `ads.fe.Mass` on new grids,
+each tied by `RigidBar` to the nearest beam or spine node.
+
+```matlab
+function applyDistributedMass(fe,geom,mass,opts)
+[mp,mf] = mass.CaseFractions();
+mPay = mp*mass.PayloadMax/2;                                     % half model
+if opts.Shell
+    sh = fe.Shells([fe.Shells.Label]=="CB_LowerSkin");
+    [A,xc] = shellAreaCentroid(sh);                              % 1 x n area, 3 x n centroid (global)
+    in = inPayloadRegion(geom,xc);  sh = sh(in);  A = A(in);  x = xc(1,in);
+    [xm,Lx] = deal(mean(x),max(x)-min(x));
+    w = 1 + mass.PayloadBias*(x-xm)/Lx;                           % fore/aft gradient (CG knob)
+    n0 = mPay/sum(w.*A);
+    for i = 1:numel(sh), sh(i).NSM = sh(i).NSM + n0*w(i); end
+    for t = mass.FuelTanks                                       % fuel on the tank lower skins
+        st = tankLowerSkins(fe,geom,t.EtaRange);  [At,~] = shellAreaCentroid(st);
+        for i = 1:numel(st), st(i).NSM = st(i).NSM + mf*t.Capacity/sum(At); end
+    end
+else
+    [xg,yg,mg] = sampleAreal(geom,mPay,mass.PayloadBias,[8 5]);  % 8 chordwise x 5 spanwise points
+    lumpToNearest(fe,[xg;yg;floorZ(geom,xg,yg)],mg);             % ads.fe.Mass + RigidBar to nearest beam node
+    for t = mass.FuelTanks
+        [xt,yt,mt] = sampleTank(geom,t,mf);  lumpToNearest(fe,[xt;yt;0*xt],mt);
+    end
+end
+end
+```
+
+### 8.2 OEW top-up and CG targeting
+
+```matlab
+function info = massBudget(fe,geom,mass,opts)
+mp0 = fe.GetMassProperties();                                   % new (§12, A7)
+[mpf,mff] = mass.CaseFractions();
+mSys = mass.OEW/2 - mp0.Mass + mpf*mass.PayloadMax/2 + mff*sum([mass.FuelTanks.Capacity]);
+% mp0 already contains structure + engine + cockpit + payload + fuel, so mSys = OEW/2 - (structure+engine+cockpit)
+assert(mSys > 0,'bwb:mass','FE structure + fixed items exceed OEW/2 by %.0f kg',-mSys);
+distributeSystemsNSM(fe,mSys);                                  % area-weighted over all skins / beams
+if mass.CGTarget ~= "None"
+    xnp = mass.XNP;                                              % from ads.bwb.neutralPoint (§10.2)
+    if isnan(xnp), xnp = geom.XLEMAC + 0.25*geom.MAC; end        % first pass: a.c. estimate
+    xT = ads.util.tern(mass.CGTarget=="X", mass.XCG, xnp - mass.StaticMargin*geom.MAC);
+    solveBias = @(b) cgAfterBias(fe,geom,mass,b) - xT;
+    try
+        mass.PayloadBias = fzero(solveBias,[-1 1]);
+    catch
+        warning('bwb:cg','CG target %.2f m not reachable by payload bias alone: move fuel or add ballast',xT);
+    end
+    reapplyPayload(fe,geom,mass);                               % re-apply payload NSM with the new bias
+end
+info.PayloadBias = mass.PayloadBias;
+info.Mass = fe.GetMassProperties();                             % mass, CG, inertia (half model)
+info.CoM  = supportGrid(fe,info.Mass.CG);                       % nearest independent grid -> ads.fe.Constraint
+fe.Constraints(end+1) = info.CoM;
+end
+```
+
+If `fzero` finds no bias in [−1, 1], report it: the CG target cannot be met by payload redistribution
+alone, so move fuel or add ballast.
+
+### 8.3 Full-aircraft figures from the half model
+
+Mass and I_yy double. The CG x and z are unchanged, and y = 0 by symmetry. I_xx and I_zz need the
+mirror image: `2·(I_half + m_half·y_cg²)` with the parallel-axis term. Report all of them, since BFF
+depends on I_yy/(m·MAC²).
+
+---
+
+## 9. Aero model (centre-body panels)
+
+### 9.1 CAERO1 layout (half model, `AEROS SYMXZ=+1`, or −1 for antisymmetric)
+
+| Macro-panel | y range | Chords | Chordwise boxes (Δx ≈ 0.5 m) | Spanwise boxes |
+|---|---|---|---|---|
+| Centre body (split at elevon breaks) | 0 → 4.0 | 17 → 10 | 34 | 8 |
+| Mid section | 4.0 → 6.2 | 10 → 5 | 20 | 5 |
+| Outer wing (split at elevon/aileron breaks) | 6.2 → 17.9 | 5 → 1.84 | 10 | 24 |
+
+About 600 boxes, with `Δx ≤ 0.08·V_min/f_max` (0.53 m at 100 m/s and 15 Hz).
+
+### 9.2 Camber and reflex (trim and Cm0) and twist
+
+Add `CamberFcn` to `AeroSurface`, written into `W2GJ` with the twist (§12). Reflexed centre-body
+camber `z/c = a·ξ(1−ξ)(ξ_r−ξ)` with a ≈ 0.05 and ξ_r = 0.75, tuned for Cm0 ≈ 0 about the CG, plus
+−3° tip washout. The target lift share is centre body ≈ 38 %.
+
+### 9.3 Splines
+
+* **Beam path:** SPLINE4 per panel, restricted to nodes inside the panel span; centre-body panels also
+  get the spine nodes.
+* **Shell path:** `ShellSplineMode="skin"` uses the upper-skin grids inside each panel's span, which
+  keeps the centre body's chordwise flexibility. There is no overlap across the kink.
+
+### 9.4 Control surfaces
+
+| Surface | y [m] | eta | Chord fraction |
+|---|---|---|---|
+| `ElevCB` | 1.0 → 4.0 | 0.056 → 0.2235 | 0.12 |
+| `ElevMS` | 4.0 → 6.2 | 0.2235 → 0.3464 | 0.20 |
+| `ElevOW` | 6.2 → 12.0 | 0.3464 → 0.670 | 0.25 |
+| `Ail` | 12.0 → 16.5 | 0.670 → 0.922 | 0.25 |
+
+`ElevCB` and `ElevMS` are linked to `ElevOW` through AELINK, so symmetric trim has two free variables
+(ANGLEA and ElevOW). The ailerons are locked for the symmetric case.
+
+---
+
+## 10. Aeroelastic stability workflow: finding the instability
+
+### 10.1 SOL103 free-free (symmetric and antisymmetric)
+
+```matlab
+s = ads.nast.Sol103();  s.EigMethod = 'LAN';  s.FreqRange = [0 opts.FMax];  s.LModes = opts.NModes;
+s.UpdateID(IDs);
+modes = s.run(fe,BinFolder=fullfile(bin,'s103'));
+% acceptance: symmetric half model -> 3 rigid modes (T1, T3, R2) below 1e-3*f1; list the first 10 elastic modes
+```
+
+### 10.2 Neutral point and static margin (SOL144, rigid and flexible)
+
+Two locked-trim runs at α = 0 and 1°, with the model restrained at the CoM grid:
+
+* the **flexible, restrained** run uses the model as is;
+* the **rigid** run uses `StiffnessScale = 1e3` on every region.
+
+```matlab
+function xnp = neutralPoint(fe,IDs,bin,flightCond)
+F = zeros(2,1);  My = zeros(2,1);
+for k = 1:2
+    s = ads.nast.Sol144();  s.set_trim_locked(flightCond.V,flightCond.rho,flightCond.M);
+    s.ANGLEA.Value = deg2rad(k-1);  s.CoM = flightCond.CoM;  s.isFree = false;   % restrained at CoM
+    s.UpdateID(IDs);  s.run(fe,BinFolder=fullfile(bin,sprintf('np_%d',k)));
+    h5 = mni.result.hdf5(fullfile(bin,sprintf('np_%d',k),'bin','sol144.h5'));
+    af = h5.read_aero_force();
+    pid = cell2mat(arrayfun(@(a) a.get_panelIDs(),fe.AeroSurfaces(:)','UniformOutput',false));
+    Xc  = [fe.AeroSurfaces.CentroidsGlobal];                    % same order as pid
+    [~,loc] = ismember(double(af(1).ID),pid);                   % map AEROF rows to boxes by ID
+    F(k)  = sum(af(1).F(:,3));
+    My(k) = sum(-Xc(1,loc)'.*af(1).F(:,3) + af(1).M(:,2));      % moment about x = 0 (x aft, z up)
+end
+xnp = -diff(My)/diff(F);                                        % x where dMy/dalpha = 0
+end
+```
+
+Check the AEROF force reference points and the sign conventions against a flat-plate unit test (NP at
+c/4 at low Mach). The static margin is then `SM = (x_NP − x_CG)/MAC`. Iterate §8.2 once with the
+computed NP.
+
+### 10.3 SOL145: matched points, rigid modes kept, symmetric and antisymmetric
+
+```matlab
+function [V,rho,M] = matchedPoints(h,Veas)
+[rho1,a] = ads.util.atmos(h);   rho0 = ads.util.atmos(0);
+V = Veas*sqrt(rho0/rho1);   M = V/a;   rho = rho1*ones(size(V));
+end
+```
+
+```matlab
+s = ads.nast.Sol145();
+[s.V,s.rho,s.Mach] = ads.bwb.matchedPoints(h,linspace(60,260,41));   % EAS sweep to beyond 1.15*V_D
+s.FlutterMethod = 'PKNL';                        % one-to-one (V, rho, M) lists (see A3)
+s.ReducedMachs = opts.MachList;   s.ReducedFreqs = opts.ReducedFreqs;               % A6
+s.LModes = opts.NModes;  s.FreqRange = [0 opts.FMax];  s.KeepRigidBodyModes = true; % A1 (new property)
+s.ModalDampingPercentage = opts.StructuralDamping;  s.DampingFreqs = [0 opts.FMax];
+s.set_free_free(info.CoM,opts.Symmetry);         % new helper: SUPORT 35 (sym) / 246 (antisym), A4
+s.UpdateID(IDs);
+res = s.run(fe,BinFolder=fullfile(bin,sprintf('s145_h%05.0f',h)));
+inst = ads.bwb.findInstability(res,RigidModes=rigidModeNumbers(modes));
+```
+
+### 10.4 Finding the instability and classifying it
+
+```matlab
+function out = findInstability(res,opts)
+%FINDINSTABILITY first damping zero-crossing of every root; BFF if the root starts as a rigid-body mode
+arguments
+    res struct                 % Sol145.run output: MODE, POINT, V, D, F, KF, CMPLX
+    opts.gTol = 0
+    opts.RigidModes = []       % mode numbers of the rigid-body roots (SOL103: f < 1e-3*f1)
+    opts.MinFreq = 0.05        % Hz; below this a crossing is (quasi-)static divergence
+end
+out = struct('Mode',{},'V',{},'F',{},'Type',{});
+for m = unique([res.MODE])
+    r = res([res.MODE]==m);  [V,ix] = sort([r.V]);  g = [r(ix).D];  f = [r(ix).F];
+    j = find(g(1:end-1) <= opts.gTol & g(2:end) > opts.gTol,1);
+    if isempty(j), continue, end
+    t = (opts.gTol-g(j))/(g(j+1)-g(j));   Vf = V(j)+t*(V(j+1)-V(j));   ff = f(j)+t*(f(j+1)-f(j));
+    if ff < opts.MinFreq,                  type = "divergence";
+    elseif ismember(m,opts.RigidModes),    type = "body-freedom flutter";
+    else,                                  type = "elastic flutter";
+    end
+    out(end+1) = struct('Mode',m,'V',Vf,'F',ff,'Type',type); %#ok<AGROW>
+end
+if ~isempty(out), [~,i] = sort([out.V]); out = out(i); end
+end
+```
+
+Additional evidence for BFF, to report alongside:
+
+* the unstable root's frequency rises from ≈ 0 (short period) towards the first symmetric bending frequency;
+* its complex eigenvector (`res(i).EigenVector`, already attached by `Sol145.run`) has a large pitch/plunge participation.
+
+### 10.5 Sweeps: stability boundary maps
+
+```matlab
+function T = stabilitySweep(geom,str,mass,opts,grid)
+%STABILITYSWEEP grid.h (altitudes), grid.Case, grid.SM, grid.Kscale -> table of first instabilities
+T = table();
+for cse = grid.Case, for sm = grid.SM, for ks = grid.Kscale
+    mass.Case = cse;  mass.StaticMargin = sm;
+    opts.StiffnessScale = struct('CB',ks,'MS',ks,'OW',ks);
+    [fe,info] = ads.bwb.bwb2fe(geom,str,mass,opts);  fe = fe.Flatten();  IDs = fe.UpdateIDs();
+    for h = grid.h
+        inst = runSol145(fe,IDs,info,opts,h);           % §10.3
+        if isempty(inst), first = struct('V',NaN,'F',NaN,'Type',"none"); else, first = inst(1); end
+        Veas = first.V*sqrt(ads.util.atmos(h)/ads.util.atmos(0));
+        T = [T; {cse,sm,ks,h,Veas,first.F,first.Type,info.Mass.Inertia(2,2)*2}]; %#ok<AGROW>
+    end
+end, end, end
+T.Properties.VariableNames = {'Case','SM','Kscale','h','Veas_f','f_f','Type','Iyy_full'};
+end
+```
+
+Deliverables per bay case (C1/C2/C3) × {shell, beam}:
+
+* V_f (EAS) vs altitude, for sym and antisym;
+* the instability type;
+* the margin to 1.15·V_D;
+* sensitivity of V_BFF to static margin, mass case, stiffness scale and I_yy.
+
+---
+
+## 11. Flight-dynamic behaviour: integrated rigid + elastic state-space
+
+### 11.1 Export the generalised matrices from Nastran (SOL145)
+
+Mirror the existing `Sol144.OutputAeroMatrices` DMAP pattern. Names and ALTER points are
+**version-dependent**: print the FLUTTER subDMAP with `DIAG 14` once and adjust.
+
+```matlab
+% Sol145/write_main_bdf.m (inside the Executive Control section), when obj.OutputGAF (new) is true
+println(fid,'ASSIGN OUTPUT4=''../bin/GAF.op4'',FORMATTED,UNIT=13');   % before SOL
+...
+println(fid,'SOL 145');
+println(fid,'COMPILE FLUTTER');
+println(fid,'ALTER ''FA1'' $');                 % after QHHL is formed, before the flutter solution (check)
+println(fid,'OUTPUT4 MHH,BHH,KHH,QHHL,//0/13///8 $');
+```
+
+`QHHL` holds Q_hh for every (M, k) pair in MKAERO1, in MKAERO order. Read it with the new Matran
+multi-matrix OP4 reader (§12) and split it per Mach:
+
+```matlab
+function gaf = readGAF(op4file,machs,kfreqs,nModes)
+mats = mni.result.op4(op4file).read_matrices();          % new: struct array (Name, Data), complex aware
+get  = @(n) mats(strcmpi({mats.Name},n)).Data;
+Mhh = get('MHH');  Bhh = get('BHH');  Khh = get('KHH');  QL = get('QHHL');
+nk = numel(kfreqs);  nM = numel(machs);
+Q = reshape(QL,nModes,nModes,nk,nM);                     % verify the column ordering once (unit test)
+gaf = struct('M',Mhh,'B',Bhh,'K',Khh,'Q',Q,'k',kfreqs,'Mach',machs);
+end
+```
+
+### 11.2 Roger RFA and state-space
+
+```matlab
+function rfa = rogerRFA(k,Q,beta)
+%ROGERRFA Q(p) ~ A0 + A1 p + A2 p^2 + sum_l A_{l+2} p/(p+beta_l),  p = i k  (one Mach number)
+p = 1i*k(:);  nk = numel(k);  n = size(Q,1);
+Phi = [ones(nk,1), p, p.^2, p./(p+beta(:).')];   Pr = [real(Phi); imag(Phi)];
+A = zeros(n,n,size(Phi,2));
+for r = 1:n
+    for c = 1:n
+        q = squeeze(Q(r,c,:));   A(r,c,:) = Pr \ [real(q); imag(q)];
+    end
+end
+rfa = struct('A',A,'beta',beta(:).','k',k);
+end
+```
+
+```matlab
+function sys = stateSpace(gaf,rfa,V,rho,bref)
+%STATESPACE x = [q; qdot; x_lag]  with  M qdd + B qd + K q = qdyn*[A0 q + A1 (b/V) qd + A2 (b/V)^2 qdd + sum A_l x_l]
+n = size(gaf.M,1);  nL = numel(rfa.beta);  qd = 0.5*rho*V^2;  A = rfa.A;
+Mb = gaf.M - qd*(bref/V)^2*A(:,:,3);   Bb = gaf.B - qd*(bref/V)*A(:,:,2);   Kb = gaf.K - qd*A(:,:,1);
+Mi = Mb \ eye(n);
+As = zeros(2*n+nL*n);
+As(1:n,n+1:2*n) = eye(n);
+As(n+1:2*n,1:n) = -Mi*Kb;   As(n+1:2*n,n+1:2*n) = -Mi*Bb;
+for l = 1:nL
+    ix = 2*n+(l-1)*n+(1:n);
+    As(n+1:2*n,ix) = qd*Mi*A(:,:,3+l);
+    As(ix,n+1:2*n) = eye(n);   As(ix,ix) = -(V/bref)*rfa.beta(l)*eye(n);
+end
+sys = struct('A',As,'lambda',eig(As),'V',V,'rho',rho);
+end
+```
+
+* `bref = MAC/2`, matching the reduced frequency Nastran uses (k = ω·REFC/(2V)).
+* Lag roots: `beta = 1.7*max(k)*((1:nL)/(nL+1)).^2` with `nL = 4`.
+* Root loci against V give the short period and the BFF coalescence; **cross-check the crossing speed
+  against PKNL** (acceptance: within 3 %).
+* Time responses: control step via an added control-surface mode, and gusts via `SOL146` (existing
+  `ads.nast.Sol146` + `gust.OneMC`/`Turb`) on the same free-free model.
+* Phugoid needs a speed DOF and gravity terms that are not in the DLM modal model. Add them as a
+  classical augmentation in Ph 7.
+
+---
+
+## 12. Repository edits, with code
+
+### 12.1 ads
+
+**(a) `tbx/+ads/+nast/modeParamDefaults.m`: keep the rigid-body modes (A1).**
+
+```matlab
+function defaults = modeParamDefaults(lModes,freqRange,opts)
+arguments
+    lModes
+    freqRange
+    opts.KeepRigid logical = false          % true: no LFREQ/LFREQFL, so 0 Hz modes stay in the basis
+end
+if isempty(freqRange), fr = {[],[]}; else, fr = num2cell(freqRange(1:2)); end
+lo = fr{1};  if opts.KeepRigid, lo = []; end
+defaults = {'LMODES','i',lModes; 'LMODESFL','i',lModes; ...
+            'LFREQ','r',lo; 'HFREQ','r',fr{2}; 'LFREQFL','r',lo; 'HFREQFL','r',fr{2}};
+end
+```
+
+**(b) `tbx/+ads/+nast/@Sol145/Sol145.m`: new properties and a free-free helper (A1, A4, A5).**
+
+```matlab
+properties
+    KeepRigidBodyModes logical = false;   % pass-through to modeParamDefaults(KeepRigid=...)
+    OutputGAF logical = false;            % write MHH/BHH/KHH/QHHL to ../bin/GAF.op4 (section 11.1)
+end
+methods
+    function set_free_free(obj,CoM,symmetry)
+        arguments
+            obj
+            CoM ads.fe.Constraint
+            symmetry string {mustBeMember(symmetry,["sym","antisym","none"])} = "sym"
+        end
+        obj.isFree = true;  obj.CoM = CoM;  obj.KeepRigidBodyModes = true;
+        switch symmetry
+            case "sym",     obj.DoFs = 35;       % plunge + pitch (surge SPC'd at the CoM grid)
+            case "antisym", obj.DoFs = 246;      % lateral + roll + yaw
+            otherwise,      obj.DoFs = 123456;
+        end
+    end
+end
+```
+
+In `write_flutter.m` and `write_main_bdf.m`, replace both calls:
+
+```matlab
+ads.nast.modeParamDefaults(obj.LModes,obj.FreqRange,KeepRigid=obj.KeepRigidBodyModes)
+```
+
+In `write_main_bdf.m` (Executive Control), add the §11.1 lines behind `if obj.OutputGAF`.
+
+**(c) `tbx/+ads/+nast/@Sol103/Sol103.m`: same `KeepRigidBodyModes` property. Recommend
+`EigMethod='LAN'` for free-free runs (A2).** Pass `KeepRigid` in `Sol103/write_main_bdf.m:80`.
+
+**(d) `tbx/+ads/+nast/@Sol101/*`: `Params` struct (INREL for unit loads) and ForceIDs from `Pressures`.**
+
+```matlab
+% Sol101.m
+Params struct = struct();
+% Sol101/write_main_bdf.m, after the generic PARAMs
+ads.nast.writeExtraParams(fid,obj.Params,params);      % same helper as Sol145
+% Sol101/run.m and Sol144/run.m, after the Forces/Moments block
+if ~isempty(feModel.Pressures)
+    obj.ForceIDs = [obj.ForceIDs; [feModel.Pressures.ID]'];
+end
+```
+
+**(e) `tbx/+ads/+fe/@Component/Component.m`: mass properties, shells in `GetMass`, pressures (F7, A7).**
+
+```matlab
+properties
+    Pressures (:,1) ads.fe.Pressure = ads.fe.Pressure.empty;   % new element class (optional loads)
+end
+methods
+    function m = GetMass(obj)
+        m = zeros(size(obj));
+        for i = 1:numel(obj)
+            m(i) = sum(obj(i).Beams.GetMass) + sum(obj(i).Masses.GetMass) + sum(obj(i).Shells.GetMass) ...
+                 + sum(obj(i).LBeams.GetMass) + sum(obj(i).Components.GetMass);
+        end
+    end
+    function mp = GetMassProperties(obj)
+        %GETMASSPROPERTIES total mass, CG and inertia about the CG (global axes); aero added mass excluded
+        [m,X,Ic] = obj.massItems();
+        M = sum(m);  cg = X*m(:)/M;  I = sum(Ic,3);
+        for k = 1:numel(m)
+            d = X(:,k)-cg;  I = I + m(k)*((d.'*d)*eye(3) - d*d.');
+        end
+        mp = struct('Mass',M,'CG',cg,'Inertia',I);
+    end
+    function [m,X,Ic] = massItems(obj)
+        m = zeros(1,0);  X = zeros(3,0);  Ic = zeros(3,3,0);
+        for c = obj(:)'
+            for e = c.Masses(:)'
+                m(end+1) = e.mass;  X(:,end+1) = e.Point.GlobalPos;  Ic(:,:,end+1) = e.InertiaTensor; %#ok<AGROW>
             end
-            obj.Name = 'PLOAD4';  obj.SID = SID;  obj.EID = EID;  obj.P = P;
-        end
-        function writeToFile(obj,fid,varargin)
-            writeToFile@mni.printing.cards.BaseCard(obj,fid,varargin{:})
-            obj.fprint_nas(fid,'iir',{obj.SID,obj.EID,obj.P});
-        end
-    end
-end
-```
-
-```matlab
-% ADS: tbx/+ads/+fe/Pressure.m (new) - positive P acts along the shell normal (outward, from the mesher ordering)
-classdef Pressure < ads.fe.Element
-    properties
-        Shells (:,1) ads.fe.Shell = ads.fe.Shell.empty;
-        P double = 0;          % Pa
-        ID double = nan;       % load set id (goes into Sol*.ForceIDs, like Force/Moment)
-    end
-    methods
-        function obj = Pressure(shells,P)
-            obj.Shells = shells;  obj.P = P;
-        end
-        function ids = UpdateID(obj,ids)
-            for i = 1:numel(obj), obj(i).ID = ids.SID;  ids.SID = ids.SID + 1;  end
-        end
-        function Export(obj,fid)
-            if isempty(obj), return, end
-            mni.printing.bdf.writeComment(fid,"PLOAD4 : pressure on shell elements");
-            for i = 1:numel(obj)
-                for s = obj(i).Shells(:)'
-                    mni.printing.cards.PLOAD4(obj(i).ID,s.EID,obj(i).P).writeToFile(fid);
-                end
+            for e = c.Inertias(:)'                         % 6x6 at a grid -> mass, CG offset, own inertia
+                M6 = e.InertiaTensor;  mi = M6(1,1);
+                if mi <= 0, continue, end                  % skip aero added-mass entries (translational only)
+                S = M6(4:6,1:3)/mi;  d = [S(3,2); S(1,3); S(2,1)];
+                m(end+1) = mi;  X(:,end+1) = e.Point.GlobalPos + d;                                  %#ok<AGROW>
+                Ic(:,:,end+1) = M6(4:6,4:6) - mi*((d.'*d)*eye(3) - d*d.');                           %#ok<AGROW>
+            end
+            for e = c.Beams(:)'
+                P = [e.Stations.Point];  m(end+1) = e.GetMass();  X(:,end+1) = mean([P.GlobalPos],2); %#ok<AGROW>
+                Ic(:,:,end+1) = zeros(3);                                                            %#ok<AGROW>
+            end
+            for e = c.Shells(:)'
+                m(end+1) = e.GetMass();  X(:,end+1) = mean([e.G.GlobalPos],2);  Ic(:,:,end+1) = zeros(3); %#ok<AGROW>
+            end
+            if ~isempty(c.Components)
+                [m2,X2,I2] = c.Components.massItems();  m = [m m2];  X = [X X2];  Ic = cat(3,Ic,I2);
             end
         end
-        function plt_obj = drawElement(~), plt_obj = []; end
     end
 end
 ```
 
-```matlab
-function addCabinPressure(fe,P)
-labels = ["CB_UpperSkin","CB_LowerSkin","CB_FrontBulkhead","CB_RearBulkhead","CB_SideWall"];
-fe.Pressures(end+1) = ads.fe.Pressure(fe.Shells(ismember([fe.Shells.Label],labels)),P);  % Label (new): baff Shell.Tag
-end
-```
+Also add a unit test: a single `ads.fe.Mass` gives `GetMass == mass`. Fix `Mass.GetMass` to start
+with `m = zeros(size(obj));` (A7).
 
-Acceptance: for the upper skin alone, the sum of the PLOAD4 resultants should be ≈ P × projected cabin
-area, pointing +z. Check this in the MATLAB unit test from the shell normals and in the Nastran OLOAD
-resultant. Verify the PLOAD4 sign convention against your Nastran QRG.
-
-### 5.5 `shell2fe` / `ads.fe.Shell` edits (Phase 1)
+**(f) `tbx/+ads/+baff/private/shell2fe.m`: guard, per-shell materials, `Ci`, labels, spline nodes (F1, F4, F9, F10).**
 
 ```matlab
-% shell2fe.m — per-shell materials (F4), Ci = 123 (F9), guard (F1), labels
 mats = [shells.Mat];
-[~,~,im] = unique(arrayfun(@(m) m.Hash, mats),'stable');
+[~,~,im] = unique(arrayfun(@(m) m.Hash,mats),'stable');
 feMats = ads.fe.Material.empty;
-for m = 1:max(im)
-    feMats(m,1) = ads.fe.Material.FromBaffMat(mats(find(im==m,1)));
-end
+for m = 1:max(im), feMats(m,1) = ads.fe.Material.FromBaffMat(mats(find(im==m,1))); end
 fe.Materials = [fe.Materials; feMats];
 for i = 1:numel(shells)
-    fe.Shells(end+1) = ads.fe.Shell.FromBaffStations(shells(i),fe.Points(shells(i).G), ...
-                                                      feMats(im(i)),shells(i).Thickness);
+    fe.Shells(end+1) = ads.fe.Shell.FromBaffStations(shells(i),fe.Points(shells(i).G),feMats(im(i)),shells(i).Thickness);
 end
 ...
-Ci = 123;                                              % was 123456
+Ci = 123;                                                        % was 123456
 ...
 if isprop(obj.Stations,'SecondaryBeams') && ~isempty(obj.Stations.SecondaryBeams)   % was unguarded
 ...
-% optional "skin" spline nodes (F10): mark the mesher's upper-skin grids
 if isprop(obj.Stations,'SplineNodes') && ~isempty(obj.Stations.SplineNodes)
     [fe.Points(obj.Stations.SplineNodes).Note] = deal("SplineNode");
 end
 ```
 
+**(g) `tbx/+ads/+fe/Shell.m`: NSM, 12I/T³, labels, grouped PIDs, mass (F5–F7).**
+
 ```matlab
-% ads.fe.Shell — new properties and methods (F5-F7)
 properties
-    NSM double = 0;              % kg/m^2
-    BendRatio double = 1;        % PSHELL 12I/T^3 (PRSEUS)
-    TST double = [];             % PSHELL TS/T (blank -> 0.833333)
-    Label string = "";           % from baff Shell.Tag; NOT overwritten by Component.UpdateTag
-    PropertyGroup string = "";   % shells with the same group share one PSHELL (empty -> own PID)
+    NSM double = 0;  BendRatio double = 1;  TST double = [];
+    Label string = "";          % from baff Shell.Tag (Component.UpdateTag does not touch it)
+    PropertyGroup string = "";  % same group -> same PSHELL
 end
 function m = GetMass(obj)
     m = zeros(size(obj));
     for i = 1:numel(obj)
         X = [obj(i).G.GlobalPos];
-        A = 0.5*norm(cross(X(:,3)-X(:,1), X(:,4)-X(:,2)));
-        m(i) = A*(obj(i).Thickness*obj(i).Mat.rho + obj(i).NSM);
+        m(i) = 0.5*norm(cross(X(:,3)-X(:,1),X(:,4)-X(:,2)))*(obj(i).Thickness*obj(i).Mat.rho + obj(i).NSM);
     end
 end
-% ExportToPSHELL: write each unique PID once
-tmpCard = mni.printing.cards.PSHELL(obj(i).PID,obj(i).Mat.ID,obj(i).Thickness,obj(i).Mat.ID, ...
-            obj(i).BendRatio,obj(i).Mat.ID,TST=obj(i).TST,NSM=obj(i).NSM);
+function ids = UpdateID(obj,ids)
+    grp = containers.Map('KeyType','char','ValueType','double');
+    for i = 1:numel(obj)
+        obj(i).EID = ids.EID;  ids.EID = ids.EID + 1;  g = char(obj(i).PropertyGroup);
+        if isempty(g),          obj(i).PID = ids.PID;  ids.PID = ids.PID + 1;
+        elseif isKey(grp,g),    obj(i).PID = grp(g);
+        else,                   obj(i).PID = ids.PID;  grp(g) = ids.PID;  ids.PID = ids.PID + 1;
+        end
+    end
+end
+function ExportToPSHELL(obj,fid)
+    mni.printing.bdf.writeComment(fid,"PSHELL : Defines the properties of a SHELL element.");
+    mni.printing.bdf.writeColumnDelimiter(fid,"long")
+    [~,iu] = unique([obj.PID],'stable');
+    for i = iu(:)'
+        c = mni.printing.cards.PSHELL(obj(i).PID,obj(i).Mat.ID,obj(i).Thickness,obj(i).Mat.ID, ...
+                obj(i).BendRatio,obj(i).Mat.ID,TST=obj(i).TST,NSM=obj(i).NSM);
+        c.LongFormat = obj(i).ExportLongFormat;  c.writeToFile(fid);
+    end
+end
+% FromBaffStations: pass Tag/BendRatio/NSM
+obj = ads.fe.Shell(G,Mat,Thickness,"ExportType",st.ExportType,"ply",PlyDef);
+obj.Label = st.Tag;  obj.BendRatio = st.BendRatio;  obj.NSM = st.NSM;
 ```
 
+A shared PID also shares NSM. When payload NSM varies element by element, leave `PropertyGroup`
+empty on those shells.
+
+**(h) `tbx/+ads/+fe/AeroSurface.m`: panel size and camber downwash (§9).**
+
 ```matlab
-% Matran PSHELL — backward-compatible optional fields (F5)
+properties
+    CamberFcn = [];                       % handle xi -> dz/dx of the camber line (x aft, z up)
+end
+function SetPanelSize(obj,dx,AR)
+    for i = 1:numel(obj)
+        cMax = max(obj(i).Chords);   obj(i).nChord = max(4,ceil(cMax/dx));
+        span = norm(obj(i).Points(:,2)-obj(i).Points(:,1));
+        obj(i).nSpan = max(1,ceil(span/(AR*cMax/obj(i).nChord)));
+    end
+end
+% get_twists: per surface i, BEFORE the "if X4(1) < 0" sign flip
+if ~isempty(obj(i).CamberFcn)
+    xc = obj(i).EtaChord(1:end-1) + 0.75*diff(obj(i).EtaChord);
+    angles{i} = angles{i} - rad2deg(atan(repmat(reshape(obj(i).CamberFcn(xc),[],1),obj(i).nSpan,1))).';
+end
+```
+
+**(i) `tbx/+ads/+fe/AeroSettings.m`: signed symmetry (F15).**
+
+```matlab
+SymXZ double {mustBeMember(SymXZ,[-1 0 1])} = 0;    % was logical; true/false map to 1/0
+% constructor: obj.SymXZ = double(opts.SymXZ);
+% Export: write SYMXZ = obj.SymXZ (0 written as 0)
+```
+
+**(j) `tbx/+ads/+baff/BaffOpts.m` and `private/wing2fe.m`: spline modes (F10).**
+
+```matlab
+% BaffOpts.m
+ShellSplineMode string {mustBeMember(ShellSplineMode,["hub","segment","skin"])} = "hub";
+% wing2fe.m, replacing lines 886-888
+if SplineType == 1
+    mode = string(getOpt(baffOpts,'ShellSplineMode',"hub"));  tol = 1e-6*obj.EtaLength;
+    for i = 1:numel(fe.AeroSurfaces)
+        switch mode
+            case "hub",     pts = fe.Points(idxA);
+            case "segment", pts = inSpan(fe.Points(idxA),st.Eta(i),st.Eta(i+1),obj.EtaLength,tol);
+            case "skin",    pts = inSpan(fe.Points([fe.Points.Note]=="SplineNode"),st.Eta(i),st.Eta(i+1),obj.EtaLength,tol);
+        end
+        fe.AeroSurfaces(i).StructuralPoints = pts;
+    end
+end
+function p = inSpan(p,e1,e2,L,tol)
+X = [p.X];  p = p(X(1,:) >= e1*L-tol & X(1,:) <= e2*L+tol);     % local x = spanwise (no dihedral)
+end
+```
+
+**(k) New files:** the `+ads/+bwb` package (§5–§10), the `+ads/+aeroelastic` package (§11),
+`+ads/+fe/Pressure.m` (optional, §12.3), the examples and the tests.
+
+### 12.2 baff
+
+**(a) `+station/+ShellStation/ShellStation.m`: properties, mesh-preserving interpolate, Duplicate, horzcat (F1, F12).**
+
+```matlab
+properties
+    SecondaryBeams = [];              % baff.station.LBeam array if/when merged from your fork
+    SplineNodes (:,1) double = [];    % node indices used for "skin" aero splines
+end
+% interpolate(): after the EtaDir/StationDir/Mat lines
+% (the mesh is in physical coordinates, independent of the station etas)
+out.Nodes = obj.Nodes;  out.Shell = obj.Shell;  out.SplineNodes = obj.SplineNodes;
+out.SecondaryEta = obj.SecondaryEta;  out.SecondaryNodes = obj.SecondaryNodes;
+out.ConstrainedEta = obj.ConstrainedEta;  out.ConstrainedNodes = obj.ConstrainedNodes;
+out.SecondaryBeams = obj.SecondaryBeams;
+% Duplicate(): add ConstrainedEta=obj.ConstrainedEta to the constructor call
+% horzcat(): offset node indices of each appended mesh
+off = size(obj.Nodes,1);  sh = varargin{i}.Shell;
+for s = 1:numel(sh), sh(s).G = sh(s).G + off; end
+obj.Nodes = [obj.Nodes; varargin{i}.Nodes];   obj.Shell = [obj.Shell; sh];
+obj.SecondaryNodes = [obj.SecondaryNodes; varargin{i}.SecondaryNodes + off];
+obj.SplineNodes    = [obj.SplineNodes;    varargin{i}.SplineNodes + off];
+```
+
+**(b) `+station/+ShellStation/Shell.m`: bending ratio and NSM.**
+
+```matlab
+properties
+    BendRatio double = 1;   % PSHELL 12I/T^3 (PRSEUS smeared bending)
+    NSM double = 0;         % kg/m^2
+end
+% constructor: add opts.BendRatio = 1; opts.NSM = 0;  then  obj.BendRatio = opts.BendRatio;  obj.NSM = opts.NSM;
+```
+
+**(c) `+station/@Beam/Beam.m`: fix the `HollowRect` Iyy/Izz swap (B3), consistent with `Bar`.**
+
+```matlab
+Iyy = (width*height^3 - (width-2*thickness)*(height-2*thickness)^3)/12;   % int z^2 (flap), as in Bar
+Izz = (height*width^3 - (height-2*thickness)*(width-2*thickness)^3)/12;   % int y^2
+```
+
+This changes results for existing `HollowRect` users; call it out in `changelog.txt`.
+
+**(d) Ph 7:** real ShellStation `ToBaff`/`FromBaff`/`TemplateHdf5` (F13), with a per-wing group
+because the mesh size differs per wing.
+
+### 12.3 Matran
+
+**(a) `tbx/+mni/+printing/+cards/PSHELL.m`: optional TS/T and NSM (backward compatible).**
+
+```matlab
+properties, PID; MID1; T; MID2; I12; MID3; TST; NSM; end
 function obj = PSHELL(PID,MID1,T,MID2,I12,MID3,opts)
     arguments
         PID (1,1) double {mustBePositive}
@@ -540,7 +1256,8 @@ function obj = PSHELL(PID,MID1,T,MID2,I12,MID3,opts)
         opts.TST (:,1) double = []
         opts.NSM (:,1) double = []
     end
-    ...  obj.TST = opts.TST;  obj.NSM = opts.NSM;
+    obj.PID = PID; obj.MID1 = MID1; obj.T = T; obj.MID2 = MID2; obj.I12 = I12; obj.MID3 = MID3;
+    obj.TST = opts.TST;  obj.NSM = opts.NSM;  obj.Name = 'PSHELL';
 end
 function writeToFile(obj,fid,varargin)
     writeToFile@mni.printing.cards.BaseCard(obj,fid,varargin{:})
@@ -548,394 +1265,100 @@ function writeToFile(obj,fid,varargin)
 end
 ```
 
-`Component.GetMass` must also sum `Shells.GetMass` and `LBeams.GetMass`. `Component` gets a new property,
-`Pressures (:,1) ads.fe.Pressure`.
-
----
-
-## 6. Beam path (`Shell = false`): wingbox reduction
-
-### 6.1 Analytical multi-cell condensation (spanwise stick)
-
-At each beam station, the spanwise section cut (plane normal to the beam line, ≈ constant y) is a thin-walled box:
-
-* skins from the OML (`geom.Surface`), smeared with stringers;
-* webs at the front and rear lines (cabin: front/rear bulkheads; mid/outer: spars).
-
-The internal walls are parallel to this cut, so **the spanwise stick is single-cell in the cabin**. The bay count enters through the spine (§6.2) and through mass.
+**(b) `tbx/+mni/+result/@op4/read_matrices.m` *(new)*: every matrix in a formatted OP4, real or complex (A5).**
 
 ```matlab
-function sec = boxCondensation(x,zU,zL,tU,tL,tW)
-%BOXCONDENSATION Thin-walled multi-cell section -> beam properties.
-%  x      : web positions across the section (1 x nw), sorted; first/last = closing webs
-%  zU,zL  : upper/lower skin height at those positions (1 x nw)
-%  tU,tL  : smeared skin thickness per cell (1 x nw-1)  (skin + stringer area / pitch)
-%  tW     : web thickness (1 x nw)
-%  -> A, Iyy (= int z^2 dA, flap), Izz (= int x^2 dA, in-plane), J (multi-cell Bredt-Batho)
-nw = numel(x);  nc = nw-1;
-seg = zeros(0,5);                                    % [x1 z1 x2 z2 t]
-for c = 1:nc
-    seg(end+1,:) = [x(c) zU(c) x(c+1) zU(c+1) tU(c)];   %#ok<AGROW>
-    seg(end+1,:) = [x(c) zL(c) x(c+1) zL(c+1) tL(c)];   %#ok<AGROW>
-end
-for w = 1:nw
-    seg(end+1,:) = [x(w) zL(w) x(w) zU(w) tW(w)];       %#ok<AGROW>
-end
-dx = seg(:,3)-seg(:,1);  dz = seg(:,4)-seg(:,2);  Aw = hypot(dx,dz).*seg(:,5);
-xm = (seg(:,1)+seg(:,3))/2;  zm = (seg(:,2)+seg(:,4))/2;
-A  = sum(Aw);  xc = sum(Aw.*xm)/A;  zc = sum(Aw.*zm)/A;
-Iyy = sum(Aw.*((zm-zc).^2 + dz.^2/12));
-Izz = sum(Aw.*((xm-xc).^2 + dx.^2/12));
-% St Venant torsion, equal twist rate in every cell:  D*q = 2*Acell*(G*theta')
-Acell = zeros(nc,1);  D = zeros(nc);
-for c = 1:nc
-    hL = zU(c)-zL(c);  hR = zU(c+1)-zL(c+1);
-    Acell(c) = 0.5*(x(c+1)-x(c))*(hL+hR);
-    lu = hypot(x(c+1)-x(c), zU(c+1)-zU(c));  ll = hypot(x(c+1)-x(c), zL(c+1)-zL(c));
-    D(c,c) = lu/tU(c) + ll/tL(c) + hL/tW(c) + hR/tW(c+1);
-    if c > 1,  D(c,c-1) = -hL/tW(c);   end
-    if c < nc, D(c,c+1) = -hR/tW(c+1); end
-end
-q = D \ (2*Acell);                                   % shear flows for unit G*theta'
-J = 2*sum(Acell.*q);                                 % single cell -> 4A^2 / (oint ds/t)
-sec = struct('A',A,'Iyy',Iyy,'Izz',Izz,'J',J,'xc',xc,'zc',zc);
-end
-```
-
-How it plugs into `buildBaff` when `Shell=false`:
-
-```matlab
-w = baff.Wing.FromLETESweep(b,geom.Chord(1),geom.Y/b,geom.LESweep,geom.TESweep, ...
-                            geom.BeamLoc,str.RefMat,ThicknessRatio=geom.TC);
-w.Stations = w.Stations.interpolate(geom.BeamEtas(opts));      % e.g. ~0.5 m spacing + all breaks
-for i = 1:w.Stations.N
-    y = w.Stations.Eta(i)*b;
-    [xw,tW,tU,tL] = str.SpanwiseSection(geom,y);               % webs at the front/rear lines (+ mid spar)
-    [zu,zl] = geom.Surface(xw,y);
-    s = ads.bwb.boxCondensation(xw,zu,zl,tU,tL,tW);            % modulus-weighted if materials differ
-    w.Stations.A(i)     = s.A;
-    w.Stations.I(:,:,i) = diag([s.Iyy+s.Izz, s.Iyy, s.Izz]);   % baff/Bar convention (B2)
-    w.Stations.J(i)     = s.J;
-end
-w.Stations.Mat = str.RefMat;                                    % E, G of the reference laminate
-% Mass consistency with the shell model: ribs, walls and bulkhead mass that is not in rho*A
-% is added as baff distributed mass (as in baff/tests/@TAW/SetupWings)
-w.DistributeMass(str.NonBeamMass(geom),opts.NMassStations,"tag","bwb_nonbeam","Method","Regular");
-```
-
-### 6.2 Centre-body spine: cruciform stick (the bay count appears here)
-
-A single spanwise stick makes the centre body chordwise-rigid (B4). Add a **longitudinal spine** on the centreline: two `baff.Beam` children of the BWB wing at `eta=0`, one running forward to x = 3.0 and one aft to x = 15.5–17.0.
-
-Its section at each x is the cut **across the cabin width**. The skins span W_f, and the **webs are the side walls and the internal walls**, so the section has `NBays` cells:
-
-```matlab
-function [A,I,J] = spineSection(geom,str,x)
-yw = [-geom.CabinWidth/2, -fliplr(geom.WallY), geom.WallY, geom.CabinWidth/2];   % 1/3/5 bays -> 1/3/5 cells
-yw = yw(arrayfun(@(y) x >= geom.FrontLineX(abs(y)), yw));   % home plate: walls start further aft
-zu = zeros(size(yw));  zl = zu;
-for k = 1:numel(yw), [zu(k),zl(k)] = geom.Surface(x,abs(yw(k))); end
-s  = ads.bwb.boxCondensation(yw,zu,zl,str.t("CB_UpperSkin")*ones(1,numel(yw)-1), ...
-                             str.t("CB_LowerSkin")*ones(1,numel(yw)-1),str.WallThickness(yw));
-% HALF MODEL: the spine lies on the symmetry plane, so it carries half of everything
-A = s.A/2;  I = diag([s.Iyy+s.Izz, s.Iyy, s.Izz])/2;  J = s.J/2;
-end
-```
-
-* 1 → 3 → 5 bays adds webs (bending and shear) and cells (torsion). This is the beam-path counterpart
-  of Gern's displacement relief.
-* The spine nodes lie on y = 0 and get the same symmetry SPCs.
-* Its aero coupling: `SPLINE4` sets for the centre-body panels include the spine nodes, which gives
-  chordwise (pitch-plane) flexibility.
-* **Option B2 (Ph 7):** a full **grillage**, built directly as `ads.fe` beams. Bulkheads become spanwise
-  beams, walls become chordwise beams, and skins become effective flanges, all joined at shared grids.
-  BAFF's one-bar parent/child joint cannot represent it.
-
-### 6.3 Shell-calibrated beam: the reduction checked against the shell path
-
-Three SOL101 runs on the shell model, with the root hub clamped and no masses:
-
-1. tip force normal to the chord plane;
-2. tip torque about the beam axis;
-3. tip force chordwise.
-
-These give the **3×3 compliance per unit length** of every hub segment. Its inverse gives GJ, EI_flap and EI_chord, including bend–twist coupling from sweep and laminates.
-
-```matlab
-% after the three runs: Xh (3 x nH) hub positions, rot(:,k,c) hub rotations (global), Fc/Mc (3 x 3) applied tip loads
-for k = 1:nH-1
-    e1 = (Xh(:,k+1)-Xh(:,k));  ds = norm(e1);  e1 = e1/ds;          % beam axis
-    e3 = cross(e1,chordDir(:,k));  e3 = e3/norm(e3);  e2 = cross(e3,e1);
-    Tk = [e1 e2 e3];                                                % local frame: axis, chord, normal
-    Xm = (Xh(:,k)+Xh(:,k+1))/2;   M = zeros(3);  Th = zeros(3);
-    for c = 1:3
-        M(:,c)  = Tk.'*( cross(Xh(:,end)-Xm, Fc(:,c)) + Mc(:,c) );  % internal moment at segment mid
-        Th(:,c) = Tk.'*( rot(:,k+1,c) - rot(:,k,c) ) / ds;          % twist rate and curvatures
-    end
-    Kseg = inv(((Th/M) + (Th/M).')/2);                              % symmetrised stiffness
-    GJ(k) = Kseg(1,1);  EIflap(k) = Kseg(2,2);  EIchord(k) = Kseg(3,3);
-end
-```
-
-Use this to:
-
-1. **validate §6.1**. Within ±15 % on EI_flap and GJ outboard of the kink is acceptable; expect large
-   differences in the cabin, which is plate-like;
-2. optionally **replace** the analytical stations: `BeamSource = "analytic" | "shell"` in `BWBOpts`.
-
-**Stretch goal (Ph 7).** Exact Guyan reduction to the hub set:
-
-* `ASET1` on the hubs + case control `EXTSEOUT(STIFFNESS,MASS,DMIGPCH)` in a SOL103 run (check the syntax for your version);
-* parse `KAAX`/`MAAX` from the `.pch` and inject them as `ads.fe.DMIG` (K2GG/M2GG) on the stick nodes.
-
-### 6.4 Mass on the beam path
-
-* Structural mass comes from `ρ·A`, plus distributed non-beam mass (ribs, walls, non-optimum factor).
-* Masses from §3.5 are `baff.Mass` children. `element2fe` attaches each one to the closest stick or
-  spine node with a rigid bar.
-* Payload uses a bay × row grid at floor height. **Match the shell model's mass per spanwise strip**;
-  modal comparisons are meaningless otherwise.
-
----
-
-## 7. Aero model: centre-body panels are the key difference from a tube-and-wing A320
-
-### 7.1 CAERO1 layout (DLM, half model with `AEROS SYMXZ=+1`)
-
-`wing2fe` builds one `CAERO1` per `AeroStations` interval, split further at control-surface etas. The BWB wing therefore gets centre-body panels automatically:
-
-| Macro-panel | y range | Chords | Chordwise boxes (Δx ≈ 0.5 m) | Spanwise boxes (AR ≈ 1.5) |
-|---|---|---|---|---|
-| Centre body (split at elevon breaks) | 0 → 4.0 | 17 → 10 | 34 | 8 |
-| Transition / mid section | 4.0 → 6.2 | 10 → 5 | 20 | 5 |
-| Outer wing (elevon, aileron breaks) | 6.2 → 17.9 | 5 → 1.84 | 10 | 24 |
-
-About 600 boxes. The box size meets `Δx ≤ 0.08·V_min/f_max` (0.53 m for 100 m/s and 15 Hz).
-
-The existing `SetPanelNumbers(N,AR,'Span')` uses one chordwise N everywhere, which does not suit 17 m and 1.84 m chords on the same wing. Add a size-based method:
-
-```matlab
-% ads.fe.AeroSurface (new method)
-function SetPanelSize(obj,dx,AR)
-%SETPANELSIZE chordwise box length dx [m] and box aspect ratio AR (span/chord)
-for i = 1:numel(obj)
-    cMax = max(obj(i).Chords);
-    obj(i).nChord = max(4,ceil(cMax/dx));
-    span = norm(obj(i).Points(:,2)-obj(i).Points(:,1));
-    obj(i).nSpan  = max(1,ceil(span/(AR*cMax/obj(i).nChord)));
-end
-end
-```
-
-### 7.2 Camber, reflex and twist as fixed downwash (Gern §III.D)
-
-With flat DLM panels the centre body over-lifts relative to the 38 %/62 % target. Include **camber-slope downwash** in the `W2GJ` DMI that ADS already writes for twist:
-
-* reflexed centre-body camber for the tailless trim (C_m0 ≈ 0);
-* outer-wing washout (initial twist `[0 0 0 −3]°`, tuned for a bell-shaped span load).
-
-```matlab
-% ads.fe.AeroSurface: new property CamberFcn = [] (handle: xi -> dz/dx of the camber line)
-% in get_twists, per surface i, BEFORE the "if X4(1) < 0" sign flip:
-if ~isempty(obj(i).CamberFcn)
-    xc   = obj(i).EtaChord(1:end-1) + 0.75*diff(obj(i).EtaChord);    % 3/4-box collocation points
-    dzdx = obj(i).CamberFcn(xc);                                      % nChord values
-    angles{i} = angles{i} - rad2deg(atan(repmat(dzdx(:),obj(i).nSpan,1))).';   % chordwise index fastest
-end
-```
-
-```matlab
-% simple reflexed camber line: z/c = a*xi*(1-xi)*(xr - xi); positive forward, reflexed aft of xr
-reflex = @(a,xr) @(xi) a*((1-xi).*(xr-xi) - xi.*(xr-xi) - xi.*(1-xi));   % d(z/c)/d(xi)
-% centre body: CamberFcn = reflex(0.05,0.75) -> tune a so that rigid Cm0 ~ 0 at the CG
-```
-
-`WKK` (per-box C_Lα correction) stays available for matching test or CFD data later.
-
-### 7.3 Splines: no overlap across the kink
-
-* **Beam path:** `SPLINE4` (IPS) per panel, as now, but with each panel's structural set limited to
-  nodes inside its span (plus the shared boundary station). Centre-body panels also get the spine nodes.
-* **Shell path:** new `BaffOpts.ShellSplineMode`:
-  * `"hub"`: current behaviour (F10);
-  * `"segment"`: RBE3 hubs and LE/TE nodes inside the panel span only;
-  * `"skin"` (**default for BWB**): upper-skin grids from `ShellStation.SplineNodes` inside the panel
-    span. This keeps the centre body's chordwise flexibility (Gern splined to the front and rear spars).
-
-```matlab
-% wing2fe.m, replacing lines 886-888
-if SplineType == 1
-    mode = string(getOpt(baffOpts,'ShellSplineMode',"hub"));
-    tol  = 1e-6*obj.EtaLength;
-    for i = 1:numel(fe.AeroSurfaces)
-        switch mode
-            case "hub",     pts = fe.Points(idxA);
-            case "segment", pts = inSpan(fe.Points(idxA),st.Eta(i),st.Eta(i+1),obj.EtaLength,tol);
-            case "skin",    pts = inSpan(fe.Points([fe.Points.Note]=="SplineNode"),st.Eta(i),st.Eta(i+1),obj.EtaLength,tol);
+function mats = read_matrices(obj)
+%READ_MATRICES all matrices in a formatted OP4 file -> struct array (Name, Data)
+txt = splitlines(fileread(obj.filepath));  i = 1;  mats = struct('Name',{},'Data',{});
+while i <= numel(txt)
+    h = txt{i};
+    if strlength(strtrim(h)) == 0, i = i+1; continue, end
+    hd = sscanf(h(1:32),'%d');                      % NCOL NROW FORM TYPE (formatted OP4 header)
+    ncol = hd(1);  nrow = abs(hd(2));  typ = hd(4);  name = strtrim(h(33:min(40,end)));
+    isC = any(typ == [3 4]);  D = zeros(nrow,ncol);  i = i+1;
+    while true
+        rec = sscanf(txt{i},'%d',3);  i = i+1;       % ICOL IROW NW
+        if rec(1) > ncol, i = i+1; break, end        % terminating record + its single value line
+        vals = [];
+        while numel(vals) < rec(3)
+            vals = [vals; sscanf(strrep(txt{i},'D','E'),'%f')]; i = i+1; %#ok<AGROW>
         end
-        fe.AeroSurfaces(i).StructuralPoints = pts;
+        if isC, v = vals(1:2:end) + 1i*vals(2:2:end); else, v = vals; end
+        D(rec(2)+(0:numel(v)-1),rec(1)) = v;
     end
+    mats(end+1) = struct('Name',name,'Data',D); %#ok<AGROW>
 end
-function p = inSpan(p,e1,e2,L,tol)
-X = [p.X];                                   % local wing frame: X(1,:) is spanwise (no dihedral)
-p = p(X(1,:) >= e1*L-tol & X(1,:) <= e2*L+tol);
 end
 ```
 
-### 7.4 Control surfaces (tailless: elevons + AELINK)
+Check the header field widths and the terminating record against a known OP4 written by the
+existing Sol144 `AJJ` alter, and add a unit test with a small real and a small complex matrix.
 
-| Surface | y range [m] | eta | Constant chord fraction (MSC) |
-|---|---|---|---|
-| `ElevCB` | 1.0 → 4.0 | 0.056 → 0.2235 | 0.12 |
-| `ElevMS` | 4.0 → 6.2 | 0.2235 → 0.3464 | 0.20 |
-| `ElevOW` | 6.2 → 12.0 | 0.3464 → 0.670 | 0.25 |
-| `Ail` | 12.0 → 16.5 | 0.670 → 0.922 | 0.25 |
-
-* `ElevCB` and `ElevMS` are linked to `ElevOW` through `LinkedSurface`/`LinkedCoefficent`, which
-  writes AELINK. For symmetric trim, **ANGLEA and ElevOW are the free trim variables** and `Ail` is
-  locked at 0. The centre-body elevons sit behind the rear bulkhead, where there is no structure, so
-  they are splined through the TE nodes.
-
-### 7.5 Lift-share check (acceptance for §7.2)
+**(c) `tbx/+mni/+printing/+cards/PLOAD4.m` *(new, optional pressure case)*.**
 
 ```matlab
-h5  = mni.result.hdf5(fullfile(bin,'bin','sol144.h5'));
-af  = h5.read_aero_force();                           % per subcase: box ID and F (n x 3)
-ids = double(af(1).ID);  Fz = af(1).F(:,3);
-cb  = [];
-for s = fe.AeroSurfaces(:)'
-    Yg = s.CoordSys.getPointGlobal(s.Points);
-    if max(Yg(2,:)) <= 6.2+1e-6, cb = [cb, s.get_panelIDs()]; end %#ok<AGROW>
-end
-share = sum(Fz(ismember(ids,cb)))/sum(Fz);            % target ~0.38 (range 0.33-0.40)
-```
-
----
-
-## 8. Analyses and the case matrix
-
-Six models: {C1, C2, C3} × {Shell, Beam}. Every run uses the same geometry, mass budget and aero mesh.
-
-| Run | Solution | Settings | Output metrics |
-|---|---|---|---|
-| R1 | Build + export | `bwb2fe` → `Flatten` → `UpdateIDs` → `Export` | element counts, mass, CG, I_yy, S_CAERO = 110.5 m² |
-| R2 | SOL103 free-free | sym (`SYMXZ=+1`, SPC 246) and antisym (−1, 135); 0.1–30 Hz; LModes 30 | 1st sym wing bending, centre-body pitch/bending, 1st torsion; frequencies shell vs beam |
-| R3 | SOL101 1.33P (shell only) | PLOAD4 on cabin skins, bulkheads and side wall; INREL −2; g = 0 | max skin deflection (Gern Fig 13/17 trend: C1 ≫ C2 > C3), max von Mises / strain |
-| R4 | SOL144 trim | M 0.78 cruise q; `LoadFactor` 1.0, 2.5, −1.0; `set_trim_steadyLevel(V,rho,M,CoM)`; ElevOW free | α, δ_e, **lift share**, tip deflection, root/kink bending moment, stresses ×1.5 |
-| R5 | SOL145 flutter | PK (or PKNL), sym + antisym, M 0.3/0.5/0.78, density sweep; target 1.15·V_D (A320-like V_D = 381 KEAS, M_D 0.89) | V_f, mechanism: **body-freedom flutter** (centre-body pitch + wing bending) vs classical |
-| R6 | Beam identification | §6.3 on each shell case | EI/GJ vs analytical; update the beam models |
-
-```matlab
-% Examples/BWB_A320_bay_study.m (sketch)
-S = ads.bwb.BWBStructure.PRSEUS();  Mb = ads.bwb.BWBMass.A320Class();  out = table();
-for nb = [1 3 5]
-    for isShell = [true false]
-        g = ads.bwb.BWBGeometry.A320Class(nb);
-        o = ads.bwb.BWBOpts(Shell=isShell,Symmetry="sym");
-        [fe,info] = ads.bwb.bwb2fe(g,S,Mb,o);
-        fe = fe.Flatten();  IDs = fe.UpdateIDs();
-        tag = sprintf('bwb_%dbay_%s',nb,ads.util.tern(isShell,'shell','beam'));
-        s103 = ads.nast.Sol103();  s103.FreqRange = [0.1 30];  s103.LModes = 30;  s103.UpdateID(IDs);
-        modes = s103.run(fe,BinFolder=fullfile('bwb_runs',tag,'s103'));
-        s144 = ads.nast.Sol144();  s144.set_trim_steadyLevel(230.2,0.3164,0.78,info.CoM);
-        s144.LoadFactor = 2.5;  s144.UpdateID(IDs);
-        s144.run(fe,BinFolder=fullfile('bwb_runs',tag,'s144_2p5g'));
-        share = ads.bwb.liftShare(fe,fullfile('bwb_runs',tag,'s144_2p5g'));
-        out = [out; {nb,isShell,info.Mass.Total,modes(1).Frequency,share}]; %#ok<AGROW>
+classdef PLOAD4 < mni.printing.cards.BaseCard
+    properties, SID; EID; P; end
+    methods
+        function obj = PLOAD4(SID,EID,P)
+            arguments, SID (1,1) double; EID (1,1) double; P (1,1) double; end
+            obj.Name = 'PLOAD4';  obj.SID = SID;  obj.EID = EID;  obj.P = P;
+        end
+        function writeToFile(obj,fid,varargin)
+            writeToFile@mni.printing.cards.BaseCard(obj,fid,varargin{:})
+            obj.fprint_nas(fid,'iir',{obj.SID,obj.EID,obj.P});
+        end
     end
 end
 ```
 
-(Check the `Sol103.run` return type and the `modes` field names against `+ads/+nast/@Sol103/run.m` when implementing.)
-
-**Expected trends / acceptance:**
-
-1. Structural mass: C2 ≈ C3 (within ~5 %) and C1 lighter only when displacement is unconstrained. Pressure deflection C1 ≫ C2 > C3.
-2. Shell vs beam: outer-wing bending frequency within ~10 %, and larger differences for centre-body modes, especially without the spine.
-3. Lift share 33–40 % once camber and twist are tuned.
-4. Sized cabin mass inside the 5–8 t cross-check band (§3.3) once a sizing loop exists (Ph 7).
+The matching `ads.fe.Pressure` element loops over its shells and writes one `PLOAD4` per `EID`, with
+the load-set `ID` taken from `ids.SID`.
 
 ---
 
-## 9. Repository edit list
+## 13. Phases and acceptance
 
-### ads (`frasacchi/ads`)
-
-| File | Change | Phase |
+| Phase | Content | Acceptance |
 |---|---|---|
-| `tbx/+ads/+baff/private/shell2fe.m` | guard `SecondaryBeams`; per-shell materials; `Ci=123`; pass the baff `Tag` to `Shell.Label`; mark `SplineNodes` | 1 |
-| `tbx/+ads/+fe/Shell.m` | `NSM`, `BendRatio`, `TST`, `Label`, `PropertyGroup`; `GetMass`; grouped PIDs; PSHELL with 12I/T³/TS-T/NSM; `FromBaffStations` passes `Tag`, `BendRatio`, `NSM` | 1 |
-| `tbx/+ads/+fe/@Component/Component.m` | `GetMass` includes `Shells` and `LBeams`; new `Pressures` property | 1, 4 |
-| `tbx/+ads/+fe/Pressure.m` *(new)* | PLOAD4 load element | 4 |
-| `tbx/+ads/+fe/AeroSurface.m` | `SetPanelSize`; `CamberFcn` → W2GJ | 3 |
-| `tbx/+ads/+fe/AeroSettings.m` | `SymXZ` accepts −1/0/+1 (keep logical input working) | 3 |
-| `tbx/+ads/+baff/private/wing2fe.m` | `ShellSplineMode` ("hub"/"segment"/"skin"); per-panel span filter for SPLINE1/SPLINE4 | 3 |
-| `tbx/+ads/+baff/BaffOpts.m` | `ShellSplineMode="hub"` (default keeps current behaviour) | 3 |
-| `tbx/+ads/+nast/@Sol101/*` | `Params` struct (for INREL); add `Pressures` IDs to `ForceIDs` (as Forces/Moments) | 4 |
-| `tbx/+ads/+nast/@Sol144/run.m` (and 145 if needed) | add `Pressures` IDs to `ForceIDs` (combined 2.5 g + 1.33P option) | 4 |
-| `tbx/+ads/+bwb/*` *(new package)* | everything in §4.1 | 2–6 |
-| `Examples/BWB_A320_*.m` *(new)* | build / 103 / 144 / 145 / pressure / bay study | 2–6 |
-| `tests/bwb2feTest.m` *(new)*, `tests/shellCardsTest.m` *(new)* | see §10 | 1–6 |
-| `CLAUDE.md`, `changelog.txt`, `version.txt` | document `+bwb`; bump minor version (0.4.0) at the end | 6 |
-
-### baff (`frasacchi/baff`)
-
-| File | Change | Phase |
-|---|---|---|
-| `+station/+ShellStation/ShellStation.m` | add `SecondaryBeams` (empty default; or merge from your fork together with `baff.station.LBeam`), `SplineNodes (:,1)`; `interpolate` keeps `Nodes/Shell` (return a copy with the new etas, since the mesh is eta-independent); `Duplicate` keeps `ConstrainedEta`; `horzcat` offsets node indices | 1 |
-| `+station/+ShellStation/Shell.m` | `BendRatio = 1`, `NSM = 0` | 1 |
-| `+station/+ShellStation/ToBaff.m`, `FromBaff.m`, `TemplateHdf5.m` | real shell IO: Nodes, connectivity, thickness, material table, tags, Secondary*/Constrained*/SplineNodes | 1 |
-| `+station/@Beam/Beam.m` | fix the `HollowRect` Iyy/Izz swap (B3), with a regression test | 5 |
-| `tests/ShellStationTest.m` *(new)* | round-trip H5, interpolate keeps the mesh | 1 |
-
-### Matran (`frasacchi/Matran`)
-
-| File | Change | Phase |
-|---|---|---|
-| `tbx/+mni/+printing/+cards/PSHELL.m` | optional `TST`, `NSM` (backward compatible) | 1 |
-| `tbx/+mni/+printing/+cards/PLOAD4.m` *(new)* | pressure card | 4 |
-| (Ph 7) `+mni/+result/@hdf5/read_stress_QUAD4.m` *(if missing)* | for sizing loops | 7 |
-
----
-
-## 10. Phased roadmap and acceptance tests
-
-| Phase | Content | Acceptance (all in `runtests('tests')` unless noted) |
-|---|---|---|
-| **0** Trials | Run T1/T2 (§2.3) locally and record the results in this file | F1 reproduced; T2 prints the CAERO area ≈ 110.5 m² and the LE-node counts |
-| **1** Shell foundations | §9 Phase-1 edits in all three repos | T1 builds and exports; BDF has one MAT per material, PSHELL with 12I/T³ and NSM, RBE3 `Ci=123`; `Component.GetMass` = Σρ·t·A; ShellStation H5 round-trip |
-| **2** Geometry + mesher | `BWBGeometry`, `BWBStructure`, `meshShellStation`, `buildBaff(Shell=true)`, `bwb2fe` skeleton | Areas/spans within 1 % of §3.2; 1/3/5-bay walls at the §3.4 y values; all skin normals outward; no zero-area or duplicate elements; C1/C2/C3 export; `fe.draw()` |
-| **3** Aero | `SetPanelSize`, `CamberFcn`, spline modes, control surfaces, AEROS ±1 | Σ CAERO area = S/2; no SPLINE set holds nodes outside its panel span (+ boundary); *(Nastran)* rigid SOL144 runs and lift share is reported |
-| **4** Loads, BCs, mass | PLOAD4, `Pressure`, Sol101 `Params`/INREL, symmetry BCs, `massBudget`, CoM node | PLOAD4 resultant check; SPC never on dependent grids; mass = MTOM/2 ± 0.5 %, CG at target ± 0.1 m; *(Nastran)* SOL103 sym/antisym with 3 rigid modes (sym: T1, T3, R2) ≈ 0 Hz; SOL101 1.33P runs |
-| **5** Beam path | `boxCondensation`, `spineSection`, `buildBaff(Shell=false)`, `identifyBeamFromShell`, baff `HollowRect` fix | Single cell reproduces 4A²/∮ds/t; a symmetric two-cell box agrees with the textbook result; C1/C2/C3 beam models build; *(Nastran)* identified vs analytic EI/GJ within ±15 % outboard |
-| **6** Case study | `BWB_A320_bay_study.m`, SOL145 examples, docs | Table of §8 metrics for 6 models plus plots; trends as in §8, with deviations explained |
-| **7** (optional) | Sizing loop (FSD in MATLAB or a `Sol200` class), PCOMP/MAT8 tailoring, CTRIA3 transitions, grillage B2, EXTSEOUT → DMIG | case-specific |
+| **0** | Trials T1–T3 (§3.4) | F1 and A1 reproduced; T2 prints S_half ≈ 110.5 m² |
+| **1** | Shell foundations + mass properties (§12.1 e–g, §12.2 a–b, §12.3 a) | T1 builds and exports; PSHELL has 12I/T³ and NSM; RBE3 `Ci=123`; `GetMassProperties` matches hand calculations (point masses, one shell, one beam) |
+| **2** | Geometry, mesher, `bwb2fe` (shell) | Areas within 1 %; walls at the §4.3 y values; outward normals; C1/C2/C3 build and export |
+| **3** | Aero (panel size, camber, spline modes, controls, SYMXZ ±1) | Σ CAERO area = S/2; no spline point outside its panel span; *(Nastran)* rigid SOL144 runs |
+| **4** | Distributed mass, CG targeting, free-free, NP, SOL145 settings (§12.1 a–d) | Mass = case mass/2 ± 0.5 %; CG = target ± 0.05 m; *(Nastran)* SOL103 gives 3 rigid modes ≈ 0 Hz; **flutter.bdf has no LFREQFL, and the summary contains roots that start at ≈ 0 Hz**; NP unit test on a flat plate |
+| **5** | Beam path (condensation, spine, calibration, `HollowRect` fix) | Single cell = 4A²/∮ds/t; textbook two-cell case; *(Nastran)* identified vs analytic within ±15 % outboard; beam vs shell first sym bending within 10 % |
+| **6** | Stability study: `stabilitySweep` over C1/C2/C3 × shell/beam × {MTOM, MZFW, OEW} × SM {0, 0.05, 0.10} × Kscale {0.5, 1, 2}; GAF export → RFA → state-space | Boundary tables and plots; BFF identified where present; state-space and PKNL crossing speeds within 3 % |
+| **7** (optional) | Phugoid augmentation, gust/control time responses, grillage B2, ShellStation H5 IO, pressure case, sizing loop, PCOMP tailoring | case-specific |
 
 Unit-test skeleton:
 
 ```matlab
 classdef bwb2feTest < matlab.unittest.TestCase
     properties (TestParameter)
-        nBays   = {1,3,5};
-        isShell = {true,false};
+        nBays = {1,3,5};  isShell = {true,false};
     end
     methods (Test)
         function buildsAndExports(tc,nBays,isShell)
-            g  = ads.bwb.BWBGeometry.A320Class(nBays);
-            fe = ads.bwb.bwb2fe(g,ads.bwb.BWBStructure.PRSEUS(),ads.bwb.BWBMass.A320Class(), ...
-                                ads.bwb.BWBOpts(Shell=isShell));
-            tc.verifyEqual(sum([fe.AeroSurfaces.Area]), g.Area/2, 'RelTol',0.01);
-            fe = fe.Flatten();  fe.UpdateIDs();
-            f = [tempname '.bdf'];  fe.Export(f);  tc.verifyTrue(isfile(f));
+            g = ads.bwb.BWBGeometry.A320Class(nBays);
+            [fe,info] = ads.bwb.bwb2fe(g,ads.bwb.BWBStructure.PRSEUS(),ads.bwb.BWBMass.A320Class(), ...
+                                       ads.bwb.BWBOpts(Shell=isShell));
+            tc.verifyEqual(sum([fe.AeroSurfaces.Area]),g.Area/2,'RelTol',0.01);
+            tc.verifyEqual(info.Mass.Mass,79000/2,'RelTol',0.005);
+            fe = fe.Flatten();  fe.UpdateIDs();  f = [tempname '.bdf'];  fe.Export(f);
+            tc.verifyTrue(isfile(f));
         end
         function wallsOnMesh(tc,nBays)
             g  = ads.bwb.BWBGeometry.A320Class(nBays);
-            fe = ads.bwb.bwb2fe(g,ads.bwb.BWBStructure.PRSEUS(),ads.bwb.BWBMass.A320Class(), ...
-                                ads.bwb.BWBOpts(Shell=true));
-            yw = arrayfun(@(s) s.G(1).GlobalPos(2), fe.Shells([fe.Shells.Label]=="CB_InternalWall"));
-            yw = uniquetol(yw,1e-6);                        % one y per internal wall (half model)
-            tc.verifyEqual(numel(yw), numel(g.WallY));      % 0 / 1 / 2 walls for 1 / 3 / 5 bays
-            tc.verifyEqual(sort(yw(:))', sort(g.WallY), 'AbsTol',1e-6);
+            fe = ads.bwb.bwb2fe(g,ads.bwb.BWBStructure.PRSEUS(),ads.bwb.BWBMass.A320Class(),ads.bwb.BWBOpts(Shell=true));
+            yw = arrayfun(@(s) s.G(1).GlobalPos(2),fe.Shells([fe.Shells.Label]=="CB_InternalWall"));
+            yw = uniquetol(yw,1e-6);
+            tc.verifyEqual(numel(yw),numel(g.WallY));
+            tc.verifyEqual(sort(yw(:))',sort(g.WallY),'AbsTol',1e-6);
+        end
+        function rigidModesKept(tc)
+            d = ads.nast.modeParamDefaults(40,[0.01 30],KeepRigid=true);
+            tc.verifyEmpty(d{strcmp(d(:,1),'LFREQFL'),3});
         end
     end
 end
@@ -943,33 +1366,30 @@ end
 
 ---
 
-## 11. Risks and open questions
+## 14. Risks and open questions
 
-1. **Cabin packaging vs the 140 m² inner area.** A 78 m² cabin, 1.7 m side-wall depth and C_L(FL390) ≈ 0.42
-   are all tight. `BWBGeometry` is fully parametric; the likely levers are W_f, rear-bulkhead x, t/c and
-   cruise altitude. Confirm with OpenVSP before sizing conclusions.
-2. **Fuel volume:** the outer box holds only ~5.3 t per side, so ≈ 3.6 t goes in the mid-section box.
-   Check that it is outside the pressure vessel (it is: y > 4.0).
-3. **PRSEUS `BendRatio`** needs the Velicki panel dimensions. Until they are set, run with 1.0 and
-   flag the results as "homogeneous skin".
-4. **DLM near M_D 0.89** is outside DLM's comfort zone. Use M ≤ 0.8 for clearance studies and state it.
-5. **Beam vs shell in the cabin:** a stick (even cruciform) cannot represent pressure-driven plate
-   bending, which drives cabin sizing. Treat the beam path as a *dynamics/loads* model and the shell
-   path as the *sizing* model.
-6. **Your local fork:** if `baff.station.LBeam` / `SecondaryBeams` or a `shell=false` reduction exist
-   only there, merge them first. §9 assumes the public branch.
-7. **SOL200** (Gern's optimiser) is not in ADS. The plan stops at analysis plus an optional MATLAB FSD
-   loop. A `Sol200` class would be a separate project.
+1. **DLM Cmα accuracy** decides the short period, and so the BFF speed. Calibrate NP/CLα against VLM
+   or CFD if available (WKK or `XNPTarget`). Report results against static margin rather than one
+   point value.
+2. **Rigid-body modes:** SUPORT at an independent grid near the CG, and LFREQ removed. Check that
+   ground-check and rigid-mode frequencies are ≈ 0 before trusting BFF results.
+3. **Half-model limits:** symmetric BFF is fully captured. Lateral coupling (dutch roll, tailless yaw)
+   needs the antisymmetric model, and yaw stability needs vertical surfaces (winglets) in the aero
+   model: add them as vertical CAERO1 panels if they exist in the design.
+4. **Beam vs shell in the centre body:** the spine (cruciform) is an approximation. Use the shell model
+   (or B2) as the reference for body modes.
+5. **Transonic range:** DLM is uncorrected above about M 0.8. State this in the clearance margins.
+6. **Version-dependent DMAP** for GAF export (§11.1). Verify it with `DIAG 14` for your Nastran version.
+7. **Your fork:** merge any `LBeam`/`SecondaryBeams` or `shell=false` code from your fork before Phase 1.
 
 ---
 
-## Appendix A: formulas used
+## Appendix: formulas
 
-* Joseph cabin parameterisation: `A_CB = b·ℓ_rect + ½·b·ℓ_tri`, `b = FR·ℓ`, `ℓ_tri = (b/2)·tanθ`, so
-  `ℓ = sqrt(A_CB / (FR·(1 − FR·tanθ/4)))`.
-* Joseph outer-wing junction loads (for hand checks of the SOL144 kink loads): `L0 = 8·L_OW/(π·b_ow)`,
-  `V_OW = L_OW`, `M_OW = L0·b_ow²/12` (with `L_OW = TOGW/3` in Joseph; use the SOL144 share here).
-* Bredt–Batho: single cell `J = 4A²/∮ds/t`; multi-cell `D·q = 2A·Gθ'`, `J = 2·ΣA_i q_i`.
-* DLM box size: `Δx ≤ 0.08·V/f_max`; box aspect ratio ≲ 3.
-* PSHELL PRSEUS: `12I/T³ = 12·I_panel/t_eff³`, `t_eff = (A_skin + A_str)/pitch`.
-* Quasi-isotropic IM7-8552 `[0/±45/90]s`: E = 56.1 GPa, G = 21.4 GPa, ν = 0.31, ρ = 1 578 kg/m³.
+* Bredt–Batho: `J = 4A²/∮ds/t`; multi-cell `D·q = 2A·Gθ'`, `J = 2ΣA_i q_i`.
+* NP from two locked runs: `x_NP = −ΔM_y/ΔF_z` about x = 0; `SM = (x_NP − x_CG)/MAC`.
+* Matched point: `V = V_EAS·sqrt(ρ0/ρ(h))`, `M = V/a(h)`.
+* Reduced frequency (Nastran AERO): `k = ω·REFC/(2V)`, with REFC = MAC = 9.23 m, so `bref = 4.6 m`.
+* Roger RFA: `Q(p) = A0 + A1 p + A2 p² + Σ A_{l+2} p/(p+β_l)`, `p = ik`; lag state `ẋ_l = q̇ − (V/b)β_l x_l`.
+* DLM box size: `Δx ≤ 0.08·V/f_max`.
+* QI IM7-8552 `[0/±45/90]s`: E = 56.1 GPa, G = 21.4 GPa, ν = 0.31, ρ = 1 578 kg/m³.
