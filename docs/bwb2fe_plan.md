@@ -1,4 +1,4 @@
-# `bwb2fe` — BWB aeroelastic model generation for ADS (implementation plan, v2)
+# `bwb2fe` — BWB aeroelastic model generation for ADS (implementation plan, v3)
 
 > **Goal.** Build an **A320-class blended-wing-body (BWB)** MSC Nastran model in ADS for
 > **aeroelastic stability and dynamic behaviour**: find where the free-flying aircraft becomes
@@ -21,6 +21,18 @@
 > * Pressure loading is optional.
 > * New inputs for BFF (§2) and new stability and flight-dynamics workflows (§10–§11).
 > * Code snippets for every repository edit (§12).
+>
+> **v3 changes (parametric studies and augmentation):**
+> * The planform is now **fully parametric**. The outer wing can be **stretched** (longer span) or
+>   given a **tip extension**, and its **sweep** (c/4 or LE), taper, t/c, twist and dihedral can change.
+>   Everything derived from the planform (etas, control surfaces, fuel tanks, gauges, mesh, aero panels,
+>   CG/NP, mass) is recomputed per geometry (§5.3).
+> * Policies for parametric studies: how gauges, OEW, fuel and CG respond when the geometry changes (§5.3, §8).
+> * **Pitch and plunge stiffness/damping augmentation.** Structurally, this is a grounded `CBUSH` at a
+>   reference grid, run in Nastran. Modally, it is added to K_hh and B_hh for fast MATLAB sweeps. Inputs
+>   can be absolute K/C or a target frequency and damping ratio (§10.6).
+> * A `ParametricStudy` runner. Geometry, mass and stiffness points need Nastran runs (with caching and
+>   async jobs); augmentation points are swept in MATLAB from the saved matrices (§10.7).
 >
 > Status: **plan only; no repository code changed.** The "trial" of the current code (§3) was done by
 > reading and tracing the source. MATLAB and Nastran were not available where this was written, so
@@ -76,6 +88,9 @@ elastic frequencies (stiffness, mass distribution) matter far more than the cabi
 | **Aero calibration** | `CLaTarget`, `XNPTarget` (or WKK factors); centre-body camber/reflex; tip washout | off; reflex 0.05; −3° | The DLM's Cmα sets the short period. Calibrate if CFD/VLM data exist. |
 | **Controls** | elevon/aileron layout (§9.4); for ASE later: actuator bandwidth | as §9.4 | Trim, control effectiveness/reversal, and flight-dynamics inputs. |
 | **Gusts** (dynamic behaviour) | 1-cos gust lengths, turbulence (existing `ads.nast.gust.*`) | CS-25 | Response of the flexible free-flying aircraft. |
+| **Parametric outer wing** | `OW.Span` (stretch), `OW.Sweep` + `OW.SweepDef` ("QC"/"LE"), `OW.Taper`, `OW.TCTip`, `OW.TwistTip`, `OW.Dihedral`; `Tip.Span/Sweep/Taper/Dihedral` (tip extension) | 11.7 m, 29.1° c/4, 0.368, 0.11, −3°, 0°; no tip | Span sets the bending frequency; sweep moves NP, CG and I_yy and adds bend–twist coupling. Both shift the BFF coalescence. |
+| **Study policies** | `GaugeRule` (fixed / momentScaled), `OEWPolicy` (fixedSystems / fixedOEW), `FuelPolicy` (fixedFuel / volumeScaled), `CGPolicy` (fixedSM / fixedPayload), `RefChord` (fixed across a study) | momentScaled, fixedSystems, fixedFuel, fixedSM, baseline MAC | These decide what a "longer" or "more swept" wing means, so results are comparable across the study. |
+| **Pitch/plunge augmentation** | `Augment.Kpitch/Cpitch/Kplunge/Cplunge` (full aircraft), or `FPitch/ZetaPitch/FPlunge/ZetaPlunge`; `RefX/RefZ` (pivot, default CG); `Mode` = structural / modal / both | none | Emulates a wind-tunnel pitch–plunge mount or an ideal pitch SAS (attitude feedback = stiffness, rate feedback = damping). Used to map BFF sensitivity and suppression. |
 
 **Reduced or removed:** detailed cabin packaging and seat counts. Pressure loading is kept as an
 optional case (`IncludePressure=false`); it does not change the linear stability results.
@@ -127,6 +142,7 @@ optional case (`IncludePressure=false`); it does not change the linear stability
 | A6 | `Sol145.ReducedFreqs` default `[0.01 0.05 0.1 0.2 0.5 …]` is sparse at low k. | `Sol145.m:53` | Poor quasi-steady and BFF accuracy. Use a dense low-k set. | 4 |
 | A7 | `Component` has no CG/inertia method, and `Mass.GetMass` starts with `m = size(obj)`, which returns `[m 1]` for a single mass (+1 kg). | `Component.m`, `Mass.m:33` | CG and I_yy reporting and static-margin targeting need new code. | 1 |
 | A8 | No reader for SOL144 stability derivatives. | Matran `@f06` | Compute NP from AEROF resultants instead (§10.2). | 4 |
+| A9 | Matran `CBUSH` rejects `CID=0` and an empty `GB`, and its `'x'` orientation branch writes `G0` instead of X1–X3. `inv_dof([])` returns 123456, which clamps the CoM grid. | `Matran/.../CBUSH.m`; `+nast/inv_dof.m` | Grounded augmentation springs cannot be written, and a fully sprung free-free model would be clamped. | 4 |
 
 ### 3.4 Phase-0 trial scripts (run locally)
 
@@ -175,6 +191,9 @@ end
 | Envelope (A320-like) | V_C 350 KEAS / M_C 0.82; **V_D 381 KEAS / M_D 0.89**; clearance to **1.15·V_D ≈ 225 m/s EAS** |
 
 ### 4.2 Half-planform (x aft, y starboard, z up; metres)
+
+These are the **default parameter values** of `BWBGeometry` (§5.3). In a parametric study every number
+below is recomputed from the parameters: stations, chords, x_LE, areas, MAC, etas and beam line.
 
 | Station | y | Chord | x_LE | x_TE | t/c | Role |
 |---|---|---|---|---|---|---|
@@ -225,8 +244,14 @@ ads/tbx/+ads/+bwb/                       (new package)
   BWBGeometry.m        planform, payload region, spars, bays; A320Class(nBays)
   BWBStructure.m       materials, gauges per region tag, PRSEUS 12I/T^3, stiffness scaling
   BWBMass.m            mass cases, distributed payload, fuel tanks, engines, CG/SM target
-  BWBOpts.m            model form, mesh, aero, stability settings
+  BWBOpts.m            model form, mesh, aero, stability settings, study policies
+  BWBAugment.m         pitch/plunge stiffness and damping augmentation inputs
   bwb2fe.m             entry point -> [fe, info]
+  controlSurfaces.m    control surfaces from region fractions (move with span/sweep changes)
+  momentGauge.m        moment-scaled outer-wing gauges (GaugeRule = "momentScaled")
+  addAugmentation.m    grounded CBUSH at an RBE3 reference grid (structural augmentation)
+  ParametricStudy.m    grid runner: Nastran-level points (cached, async) + MATLAB-level augmentation sweeps
+  plotStudy.m          V_f vs parameter plots with the 1.15*V_D line
   buildBaff.m          geometry -> baff.Model (one baff.Wing [+ spine] + masses + control surfaces)
   meshShellStation.m   structured CQUAD4 mesher -> ShellStation
   boxCondensation.m    thin-walled multi-cell section properties (beam reduction)
@@ -244,7 +269,11 @@ ads/tbx/+ads/+aeroelastic/               (new package, model-independent)
   readGAF.m            OP4 -> Mhh, Bhh, Khh, Qhh(k) at each Mach
   rogerRFA.m           rational function approximation
   stateSpace.m         rigid + elastic + aero-lag state-space at (V, rho)
-  rootLocus.m          eigenvalues vs V with root tracking
+  rootLocus.m          eigenvalues vs V with root tracking (nearest-neighbour continuation)
+  firstCrossing.m      first speed where a tracked root reaches Re(lambda) > 0 (+ frequency, root id)
+  augmentModal.m       add grounded plunge/pitch K and C in modal coordinates (fast sweeps)
+  augmentationSweep.m  V_f over a grid of augmentation values from one saved GAF set
+ads/tbx/+ads/+fe/Bush.m                  (new) CBUSH/PBUSH element, grounded if Point2 is empty
 ads/Examples/BWB_A320_{build,sol103,np_sol144,bff_sol145,statespace,gust_sol146,bay_study}.m
 ads/tests/bwb2feTest.m, tests/aeroelasticTest.m
 ```
@@ -257,7 +286,7 @@ BWBStructure ├─> buildBaff ─> baff.Model ─> ads.baff.baff2fe ─> fe
 BWBMass ─────┤   Shell: FromLETESweep_Shell + meshShellStation (-> shell2fe)
 BWBOpts ─────┘   Beam : FromLETESweep + boxCondensation (+ spine)  (-> beam2fe)
                                    │
-   addSymmetryBCs → applyDistributedMass → massBudget (CG/SM) → setPanelDensity → AeroSettings
+   addSymmetryBCs → applyDistributedMass → massBudget (CG/SM) → addAugmentation → setPanelDensity → AeroSettings
                                    │
    SOL103 free-free → SOL144 NP/trim → SOL145 PKNL matched points (sym/antisym)
                                    │                         │
@@ -272,24 +301,100 @@ connected mesh and its `AeroStations` put CAERO1 panels on the centre body autom
 
 ```matlab
 classdef BWBGeometry
-    %BWBGEOMETRY Half-model planform (x aft, y starboard, z up) [m, deg]
+    %BWBGEOMETRY Parametric half-model planform (x aft, y starboard, z up) [m, deg].
+    % The centre body (CB) and mid section (MS) are fixed by default. The outer wing (OW: span,
+    % sweep, taper, t/c, twist, dihedral) and an optional tip extension (Tip) are the study
+    % parameters. Every station array is DERIVED, so nothing downstream holds stale geometry.
     properties
-        Y     (1,:) double = [0 4.0 6.2 17.9];
-        Chord (1,:) double = [17.0 10.0 5.0 1.84];
-        XLE   (1,:) double = [0 7.0 10.85 18.16];
-        TC    (1,:) double = [0.17 0.17 0.14 0.11];
-        Twist (1,:) double = [0 0 0 -3];
-        BeamLoc (1,:) double = [0.544 0.500 0.375 0.375];
-        PayloadWidth = 8.0;  PayloadApexX = 3.0;  RearBulkheadX = 15.5;  FrontCornerPc = 0.15;
+        CB  = struct('RootChord',17.0,'SideY',4.0,'SideChord',10.0,'LESweep',60.26,'TC',0.17);
+        MS  = struct('KinkY',6.2,'KinkChord',5.0,'LESweep',60.26,'TC',0.14);
+        OW  = struct('Span',11.7,'Sweep',29.1,'SweepDef',"QC",'Taper',0.368, ...
+                     'TCTip',0.11,'TwistTip',-3,'Dihedral',0);
+        Tip = struct('Span',0,'Sweep',NaN,'SweepDef',"QC",'Taper',0.8,'Dihedral',0,'TwistTip',NaN);
+        PayloadApexX = 3.0;  RearBulkheadX = 15.5;  FrontCornerPc = 0.15;
         FrontSparPc = 0.125;  RearSparPc = 0.625;
         NBays (1,1) double {mustBeMember(NBays,[1 3 5])} = 3;
+        CodeCHalfSpan = 18.0;                                   % ICAO Code C (36 m): warn above
         AirfoilCB = baff.Airfoil.NACA(0,0,0.17);  AirfoilOW = baff.Airfoil.NACA(0,0,0.11);  % placeholders
     end
     properties (Dependent)
-        HalfSpan, Area, MAC, XLEMAC, WallY, LESweep, TESweep
+        Y, Chord, XLE, ZLE, TC, Twist, Dihedral, BeamLoc, PayloadWidth, ...
+        HalfSpan, Area, AspectRatio, MAC, XLEMAC, WallY, LESweep, TESweep, QCSweepOW
     end
     methods
+        % ---------- derived station arrays: [root, side wall, kink, OW tip, (tip-extension end)] ----------
+        function y = get.Y(obj)
+            y = [0, obj.CB.SideY, obj.MS.KinkY, obj.MS.KinkY + obj.OW.Span];
+            if obj.Tip.Span > 0, y(end+1) = y(end) + obj.Tip.Span; end
+        end
+        function c = get.Chord(obj)
+            c = [obj.CB.RootChord, obj.CB.SideChord, obj.MS.KinkChord, obj.OW.Taper*obj.MS.KinkChord];
+            if obj.Tip.Span > 0, c(end+1) = obj.Tip.Taper*c(end); end
+        end
+        function x = get.XLE(obj)
+            y = obj.Y;  c = obj.Chord;
+            x = [0, obj.CB.SideY*tand(obj.CB.LESweep), 0, 0];
+            x(3) = x(2) + (y(3)-y(2))*tand(obj.MS.LESweep);
+            x(4) = sweptLE(x(3),c(3),c(4),y(4)-y(3),obj.OW.Sweep,obj.OW.SweepDef);  % pivot = kink section
+            if obj.Tip.Span > 0
+                if isnan(obj.Tip.Sweep), sw = obj.OW.Sweep; def = obj.OW.SweepDef;
+                else,                    sw = obj.Tip.Sweep; def = obj.Tip.SweepDef; end
+                x(5) = sweptLE(x(4),c(4),c(5),y(5)-y(4),sw,def);
+            end
+        end
+        function z = get.ZLE(obj)
+            y = obj.Y;  z = zeros(size(y));
+            z(4) = (y(4)-y(3))*tand(obj.OW.Dihedral);
+            if numel(y) > 4, z(5) = z(4) + (y(5)-y(4))*tand(obj.Tip.Dihedral); end
+        end
+        function t = get.TC(obj)
+            t = [obj.CB.TC, obj.CB.TC, obj.MS.TC, obj.OW.TCTip];
+            if obj.Tip.Span > 0, t(end+1) = obj.OW.TCTip; end
+        end
+        function t = get.Twist(obj)
+            t = [0 0 0 obj.OW.TwistTip];
+            if obj.Tip.Span > 0
+                tt = obj.Tip.TwistTip;  if isnan(tt), tt = obj.OW.TwistTip; end
+                t(end+1) = tt;
+            end
+        end
+        function d = get.Dihedral(obj)          % per segment, as used by baff.Wing.FromLETESweep
+            d = [0 0 obj.OW.Dihedral 0];
+            if obj.Tip.Span > 0, d = [0 0 obj.OW.Dihedral obj.Tip.Dihedral 0]; end
+        end
+        function bl = get.BeamLoc(obj)          % beam line = box mid-chord at every station
+            bl = zeros(size(obj.Y));
+            for i = 1:numel(bl)
+                [xf,xr] = obj.BoxLines(obj.Y(i));
+                bl(i) = ((xf+xr)/2 - obj.XLE(i))/obj.Chord(i);
+            end
+        end
+        function w = get.PayloadWidth(obj),  w = 2*obj.CB.SideY;  end
         function b = get.HalfSpan(obj),  b = obj.Y(end);  end
+        function a = get.AspectRatio(obj),  a = (2*obj.HalfSpan)^2/obj.Area;  end
+        function s = get.QCSweepOW(obj)
+            x = obj.XLE + 0.25*obj.Chord;   s = atand((x(4)-x(3))/(obj.Y(4)-obj.Y(3)));
+        end
+        % ---------- helpers used by the mesher, masses, controls and tanks ----------
+        function [y0,y1] = RegionSpan(obj,region)
+            y = obj.Y;
+            switch region
+                case "CB",  y0 = 0;     y1 = y(2);
+                case "MS",  y0 = y(2);  y1 = y(3);
+                case "OW",  y0 = y(3);  y1 = y(4);
+                case "TIP", y0 = y(4);  y1 = y(end);
+            end
+        end
+        function eta = EtaOf(obj,region,frac)
+            [y0,y1] = obj.RegionSpan(region);   eta = (y0 + frac*(y1-y0))/obj.HalfSpan;
+        end
+        function validate(obj)
+            assert(all(obj.Chord > 0.3),'bwb:geom','chord below 0.3 m');
+            assert(obj.OW.Span > 0,'bwb:geom','outer-wing span must be positive');
+            if obj.HalfSpan > obj.CodeCHalfSpan
+                warning('bwb:codeC','span %.1f m exceeds ICAO Code C (36 m): folding tip implied',2*obj.HalfSpan);
+            end
+        end
         function S = get.Area(obj),      S = 2*trapz(obj.Y,obj.Chord);  end
         function c = get.MAC(obj)
             y = linspace(0,obj.HalfSpan,2001);  cc = interp1(obj.Y,obj.Chord,y);
@@ -325,11 +430,16 @@ classdef BWBGeometry
             %so aerodynamic camber goes in AeroSurface.CamberFcn instead.
             c = interp1(obj.Y,obj.Chord,y);  xi = (x - interp1(obj.Y,obj.XLE,y))/c;
             tc = interp1(obj.Y,obj.TC,y);   af = ads.util.tern(y <= obj.Y(3),obj.AirfoilCB,obj.AirfoilOW);
-            zu = c*tc*interp1(af.Etas,af.Ys(:,1),xi,'pchip');
-            zl = c*tc*interp1(af.Etas,af.Ys(:,2),xi,'pchip');
+            z0 = interp1(obj.Y,obj.ZLE,y);                      % dihedral offset of the reference plane
+            zu = z0 + c*tc*interp1(af.Etas,af.Ys(:,1),xi,'pchip');
+            zl = z0 + c*tc*interp1(af.Etas,af.Ys(:,2),xi,'pchip');
         end
         function r = Region(obj,y)
-            if y < obj.PayloadWidth/2, r = "CB"; elseif y < obj.Y(3), r = "MS"; else, r = "OW"; end
+            if y < obj.PayloadWidth/2,                   r = "CB";
+            elseif y < obj.Y(3),                         r = "MS";
+            elseif numel(obj.Y) == 4 || y <= obj.Y(4),   r = "OW";
+            else,                                        r = "TIP";
+            end
         end
     end
     methods (Static)
@@ -338,7 +448,32 @@ classdef BWBGeometry
         end
     end
 end
+
+function xt = sweptLE(xr,cr,ct,span,sweep,def)
+%SWEPTLE tip LE x from root LE, chords and a sweep defined at the LE or the quarter chord
+switch def
+    case "LE", xt = xr + span*tand(sweep);
+    case "QC", xt = xr + 0.25*cr + span*tand(sweep) - 0.25*ct;
+end
+end
 ```
+
+Baseline check: `OW.Sweep = 29.1` (c/4) gives x_LE,tip = 18.15 m, matching §4.2.
+
+Typical study edits:
+
+```matlab
+g = ads.bwb.BWBGeometry.A320Class(3);
+g.OW.Span  = 13.7;                         % stretch: +2 m per side (b = 39.8 m, Code C warning)
+g.OW.Sweep = 35;                           % c/4 sweep about the kink section
+g.Tip.Span = 1.5;  g.Tip.Taper = 0.8;      % tip extension beyond the stretched tip
+g.Tip.Sweep = 40;  g.Tip.Dihedral = 5;     % its own sweep and dihedral
+```
+
+* **Stretch** (`OW.Span`) keeps the taper, so the chords along the whole outer panel change.
+* **Tip extension** (`Tip.*`) leaves the baseline outer panel unchanged and adds a segment. It is part
+  of the same continuous wing: the mesh, the beam and the aero panels all run through it.
+* A *hinged* (folding) tip is a later option on the beam path, using `baff.Hinge` as in the FFWT examples.
 
 ```matlab
 classdef BWBMass
@@ -347,8 +482,9 @@ classdef BWBMass
         Case string {mustBeMember(Case,["MTOM","MZFW","OEW","Custom"])} = "MTOM";
         PayloadFraction = 1;  FuelFraction = 1;           % used when Case == "Custom"
         PayloadBias = 0;                                    % NSM(x) = n0*(1 + PayloadBias*(x-xm)/L)
-        FuelTanks = struct('Name',{"OW","MS"},'EtaRange',{[0.3464 0.86],[0.2235 0.3464]}, ...
-                           'Capacity',{5300,3600});         % per half [kg]
+        FuelTanks = struct('Name',{"OW","MS"},'Region',{"OW","MS"},'Frac',{[0 0.8],[0 1]}, ...
+                           'Capacity',{5300,3600});         % per half [kg]; region fractions move with geometry
+        SystemsMassHalf = NaN;                              % set once from the baseline (OEWPolicy="fixedSystems")
         Engine  = struct('Mass',4000,'X',[16.0;2.5;1.8],'PylonFreq',3.0);
         Cockpit = struct('Mass',907,'X',[2.0;0;0]);
         CGTarget string {mustBeMember(CGTarget,["StaticMargin","X","None"])} = "StaticMargin";
@@ -391,11 +527,69 @@ classdef BWBOpts
         NModes = 40;  FMax = 30;  KeepRigidBodyModes logical = true;  StructuralDamping = 0;
         % optional loads
         IncludePressure logical = false;  CabinDeltaP = 59.3e3;  PressureFactor = 1.33;
+        % parametric-study policies (what changes when the geometry changes)
+        GaugeRule  string {mustBeMember(GaugeRule,["fixed","momentScaled"])} = "momentScaled";
+        OEWPolicy  string {mustBeMember(OEWPolicy,["fixedSystems","fixedOEW"])} = "fixedSystems";
+        FuelPolicy string {mustBeMember(FuelPolicy,["fixedFuel","volumeScaled"])} = "fixedFuel";
+        CGPolicy   string {mustBeMember(CGPolicy,["fixedSM","fixedPayload"])} = "fixedSM";
+        RefChord = NaN;                  % AERO REFC; NaN -> current MAC. Fix it to the baseline MAC in a study
+        ControlSurfaceSpec = struct('Name',{"ElevCB","ElevMS","ElevOW","Ail"}, ...
+            'Region',{"CB","MS","OW","OW"},'Frac',{[0.25 1],[0 1],[0 0.5],[0.5 0.88]}, ...
+            'ChordFrac',{0.12,0.20,0.25,0.25},'LinkTo',{"ElevOW","ElevOW","",""});
+        % rigid-body augmentation (section 10.6)
+        Augment ads.bwb.BWBAugment = ads.bwb.BWBAugment();
     end
     methods
         function obj = BWBOpts(opts)
             arguments, opts.?ads.bwb.BWBOpts, end
             for p = string(fieldnames(opts))', obj.(p) = opts.(p); end
+        end
+    end
+end
+```
+
+| Policy | Options | Use |
+|---|---|---|
+| `GaugeRule` | `fixed`: outer-wing gauges vary linearly in the *outer-span fraction*. `momentScaled`: skin gauge from the 2.5 g bending moment at a baseline-calibrated stress (§6.2). | `momentScaled` for realistic trends (a longer wing is re-sized, not just made floppier). `fixed` isolates the pure geometric effect. |
+| `OEWPolicy` | `fixedSystems`: the systems/secondary mass is fixed at its baseline value, so OEW grows with structure. `fixedOEW`: the total mass is held and the systems top-up absorbs structural changes. | `fixedSystems` is physically consistent. `fixedOEW` separates stiffness effects from mass effects. |
+| `FuelPolicy` | `fixedFuel`: the same fuel mass is spread over the new tank volumes. `volumeScaled`: capacity follows box volume. | `fixedFuel` for a fixed mission. |
+| `CGPolicy` | `fixedSM`: the payload bias is re-solved so the static margin is held against *this* geometry's NP (costs two extra SOL144 runs). `fixedPayload`: the baseline payload bias is kept and the CG moves. | `fixedSM` isolates the elastic and inertial effect of span or sweep on BFF. `fixedPayload` shows the full configuration effect. |
+| `RefChord` | fixed number | Keep REFC fixed across a study so one `ReducedFreqs` list stays valid for all geometries. |
+
+```matlab
+classdef BWBAugment
+    %BWBAUGMENT grounded plunge/pitch spring + damper at a reference point (full-aircraft values)
+    properties
+        Mode string {mustBeMember(Mode,["none","structural","modal","both"])} = "none";
+        RefX = NaN;  RefZ = NaN;                 % pivot [m]; NaN -> CG
+        Kplunge = 0;  Cplunge = 0;               % N/m, N s/m
+        Kpitch  = 0;  Cpitch  = 0;               % N m/rad, N m s/rad
+        FPlunge = NaN;  ZetaPlunge = NaN;        % alternative: uncoupled frequency [Hz] and damping ratio
+        FPitch  = NaN;  ZetaPitch  = NaN;
+        Radius = 2.0;                            % RBE3 spreading radius at the pivot [m]
+    end
+    methods
+        function [K,C] = Values(obj,mpFull,xref)
+            %Values [plunge pitch] stiffness and damping, full aircraft, about the pivot xref (3x1)
+            m = mpFull.Mass;  d = mpFull.CG - xref;
+            Iyy = mpFull.Inertia(2,2) + m*(d(1)^2 + d(3)^2);     % pitch inertia about the pivot
+            K = [obj.Kplunge obj.Kpitch];   C = [obj.Cplunge obj.Cpitch];
+            if ~isnan(obj.FPlunge)
+                w = 2*pi*obj.FPlunge;  z = obj.ZetaPlunge;  if isnan(z), z = 0; end
+                K(1) = m*w^2;   C(1) = 2*z*m*w;
+            end
+            if ~isnan(obj.FPitch)
+                w = 2*pi*obj.FPitch;   z = obj.ZetaPitch;   if isnan(z), z = 0; end
+                K(2) = Iyy*w^2; C(2) = 2*z*Iyy*w;
+            end
+        end
+        function d = SpringDoFs(obj)
+            %SpringDoFs basic-frame DOFs that get a spring (these lose their SUPORT)
+            d = [];  K = [obj.Kplunge obj.Kpitch];
+            if obj.Mode == "none" || obj.Mode == "modal", return, end
+            if K(1) > 0 || ~isnan(obj.FPlunge), d(end+1) = 3; end
+            if K(2) > 0 || ~isnan(obj.FPitch),  d(end+1) = 5; end
+            if ~isempty(d), d = str2double(sprintf('%d',d)); end      % e.g. 35
         end
     end
 end
@@ -419,10 +613,46 @@ fe = ads.baff.baff2fe(model,bOpts);
 ads.bwb.addSymmetryBCs(fe,opts.Symmetry);
 ads.bwb.applyDistributedMass(fe,geom,mass,opts);      % payload + fuel + systems (NSM or lumped)
 info = ads.bwb.massBudget(fe,geom,mass,opts);         % OEW top-up, CG targeting, CoM grid, report
+info.Augment = ads.bwb.addAugmentation(fe,info,opts.Augment);   % reference grid (+ grounded CBUSH if structural)
 ads.bwb.setPanelDensity(fe,opts.AeroBoxSize,opts.AeroBoxAR);
 symxz = ads.util.tern(opts.Symmetry=="sym",1,ads.util.tern(opts.Symmetry=="antisym",-1,0));
-fe.AeroSettings(1) = ads.fe.AeroSettings(geom.MAC,1.225,2*geom.HalfSpan,geom.Area/2,SymXZ=symxz);
+refc  = opts.RefChord;  if isnan(refc), refc = geom.MAC; end
+fe.AeroSettings(1) = ads.fe.AeroSettings(refc,1.225,2*geom.HalfSpan,geom.Area/2,SymXZ=symxz);
 info.Geometry = geom;  info.Opts = opts;
+info.Descriptors = struct('b',2*geom.HalfSpan,'S',geom.Area,'AR',geom.AspectRatio,'MAC',geom.MAC, ...
+    'OWSpan',geom.OW.Span,'OWSweepQC',geom.QCSweepOW,'TipSpan',geom.Tip.Span);
+end
+```
+
+`buildBaff` uses only derived quantities, so any parameter change goes through consistently:
+
+```matlab
+b  = geom.HalfSpan;   eta = geom.Y/b;                   % stations move with span
+if opts.Shell
+    w = baff.Wing.FromLETESweep_Shell(b,geom.Chord(1),eta,geom.LESweep,geom.TESweep,geom.BeamLoc, ...
+            str.RefMat,ThicknessRatio=geom.TC,Twist=geom.Twist,Dihedral=geom.Dihedral);
+else
+    w = baff.Wing.FromLETESweep(b,geom.Chord(1),eta,geom.LESweep,geom.TESweep,geom.BeamLoc, ...
+            str.RefMat,ThicknessRatio=geom.TC,Twist=geom.Twist,Dihedral=geom.Dihedral);
+end
+[xf0,xr0] = geom.BoxLines(0);
+w.A = ads.util.rotz(90);  w.Offset = [(xf0+xr0)/2; 0; 0];  w.Name = "BWB";
+w.ControlSurfaces = ads.bwb.controlSurfaces(geom,opts.ControlSurfaceSpec);
+```
+
+```matlab
+function cs = controlSurfaces(geom,spec)
+%CONTROLSURFACES region fractions -> etas, so surfaces stretch and move with the outer wing
+cs = baff.ControlSurface.empty;
+for k = 1:numel(spec)
+    eta = geom.EtaOf(spec(k).Region,spec(k).Frac);
+    cs(k) = baff.ControlSurface(spec(k).Name,eta,spec(k).ChordFrac*[1 1]);
+end
+for k = 1:numel(spec)
+    if strlength(spec(k).LinkTo) > 0
+        cs(k).LinkedSurface = cs([spec.Name]==spec(k).LinkTo);  cs(k).LinkedCoefficent = 1;
+    end
+end
 end
 ```
 
@@ -520,6 +750,25 @@ ratio at or below ~4.
 * `BendRatio_PRSEUS = 12·I_panel/t_eff³` with `t_eff = (A_skin + A_str)/pitch`, from the Velicki
   panel dimensions. Use 1.0 until those are set.
 * `StiffnessScale.(region)` multiplies E and G only, which leaves the mass unchanged.
+* Outer-wing gauges are defined against the **outer-span fraction** ξ = (y − y_kink)/OW.Span (tip
+  extension: continues at the tip gauge), not against absolute y. They therefore stretch with the wing.
+* `GaugeRule="momentScaled"` re-sizes the skins so that a longer or more swept wing carries its larger
+  bending moment at the same stress as the baseline:
+
+```matlab
+function t = momentGauge(geom,y,sigmaRef,nz,W,tMin)
+%MOMENTGAUGE skin gauge t(y) = M(y) / (sigmaRef * w(y) * h(y)); M from an elliptic half-aircraft load
+b  = geom.HalfSpan;  ys = linspace(y,b,200);
+L  = nz*(W/2)*(4/(pi*b))*sqrt(max(0,1-(ys/b).^2));      % running load [N/m] (scaling rule, not a loads model)
+M  = trapz(ys,L.*(ys-y));                               % bending moment at y
+[xf,xr] = geom.BoxLines(y);  [zu,zl] = geom.Surface([xf xr],y);
+t  = max(tMin, M/(sigmaRef*(xr-xf)*mean(zu-zl)));
+end
+% calibration, once on the baseline: sigmaRef = M_base(y_kink)/(t_root_base * w_base * h_base), with t_root_base = 8 mm
+```
+
+  Spars use the same factor, clipped to minimum gauge. For the beam path, `boxCondensation` receives the
+  same gauges, so both paths re-size identically.
 
 ### 6.3 Boundary conditions
 
@@ -659,17 +908,27 @@ if opts.Shell
     w = 1 + mass.PayloadBias*(x-xm)/Lx;                           % fore/aft gradient (CG knob)
     n0 = mPay/sum(w.*A);
     for i = 1:numel(sh), sh(i).NSM = sh(i).NSM + n0*w(i); end
-    for t = mass.FuelTanks                                       % fuel on the tank lower skins
-        st = tankLowerSkins(fe,geom,t.EtaRange);  [At,~] = shellAreaCentroid(st);
-        for i = 1:numel(st), st(i).NSM = st(i).NSM + mf*t.Capacity/sum(At); end
+    for t = tankLoads(geom,mass,opts)                            % fixedFuel / volumeScaled (see policy table)
+        st = tankLowerSkins(fe,geom,geom.EtaOf(t.Region,t.Frac));  [At,~] = shellAreaCentroid(st);
+        for i = 1:numel(st), st(i).NSM = st(i).NSM + mf*t.Mass/sum(At); end
     end
 else
     [xg,yg,mg] = sampleAreal(geom,mPay,mass.PayloadBias,[8 5]);  % 8 chordwise x 5 spanwise points
     lumpToNearest(fe,[xg;yg;floorZ(geom,xg,yg)],mg);             % ads.fe.Mass + RigidBar to nearest beam node
-    for t = mass.FuelTanks
+    for t = tankLoads(geom,mass,opts)
         [xt,yt,mt] = sampleTank(geom,t,mf);  lumpToNearest(fe,[xt;yt;0*xt],mt);
     end
 end
+end
+
+function T = tankLoads(geom,mass,opts)
+%TANKLOADS fuel mass per tank (half model) for the current geometry
+T = mass.FuelTanks;  V = arrayfun(@(t) ads.bwb.fuelVolume(geom,t.Region,t.Frac),T);   % usable m^3
+switch opts.FuelPolicy
+    case "fixedFuel",    total = sum([T.Capacity]);  m = total*V/sum(V);    % same fuel, new volumes
+    case "volumeScaled", m = 800*V;                                          % 0.8 kg/L, tanks full
+end
+for k = 1:numel(T), T(k).Mass = m(k); end
 end
 ```
 
@@ -679,10 +938,16 @@ end
 function info = massBudget(fe,geom,mass,opts)
 mp0 = fe.GetMassProperties();                                   % new (§12, A7)
 [mpf,mff] = mass.CaseFractions();
-mSys = mass.OEW/2 - mp0.Mass + mpf*mass.PayloadMax/2 + mff*sum([mass.FuelTanks.Capacity]);
-% mp0 already contains structure + engine + cockpit + payload + fuel, so mSys = OEW/2 - (structure+engine+cockpit)
+mFixed = mp0.Mass - mpf*mass.PayloadMax/2 - mff*sum([mass.FuelTanks.Capacity]);   % structure+engine+cockpit
+switch opts.OEWPolicy
+    case "fixedOEW",     mSys = mass.OEW/2 - mFixed;            % total mass held constant
+    case "fixedSystems", mSys = mass.SystemsMassHalf;           % baseline systems mass, OEW floats
+        if isnan(mSys), mSys = mass.OEW/2 - mFixed; end         % baseline run defines it
+end
 assert(mSys > 0,'bwb:mass','FE structure + fixed items exceed OEW/2 by %.0f kg',-mSys);
 distributeSystemsNSM(fe,mSys);                                  % area-weighted over all skins / beams
+info.SystemsMassHalf = mSys;                                    % store: ParametricStudy copies it to all points
+if opts.CGPolicy == "fixedPayload", mass.CGTarget = "None"; end % keep the baseline PayloadBias
 if mass.CGTarget ~= "None"
     xnp = mass.XNP;                                              % from ads.bwb.neutralPoint (§10.2)
     if isnan(xnp), xnp = geom.XLEMAC + 0.25*geom.MAC; end        % first pass: a.c. estimate
@@ -747,6 +1012,10 @@ camber `z/c = a·ξ(1−ξ)(ξ_r−ξ)` with a ≈ 0.05 and ξ_r = 0.75, tuned f
 | `ElevOW` | 6.2 → 12.0 | 0.3464 → 0.670 | 0.25 |
 | `Ail` | 12.0 → 16.5 | 0.670 → 0.922 | 0.25 |
 
+(Baseline values. The surfaces are specified in `BWBOpts.ControlSurfaceSpec` as **region fractions**:
+`ElevOW` covers OW [0, 0.5] and `Ail` OW [0.5, 0.88]. They stretch with `OW.Span`, and the
+`controlSurfaces` helper in §5.4 recomputes their etas.)
+
 `ElevCB` and `ElevMS` are linked to `ElevOW` through AELINK, so symmetric trim has two free variables
 (ANGLEA and ElevOW). The ailerons are locked for the symmetric case.
 
@@ -758,6 +1027,7 @@ camber `z/c = a·ξ(1−ξ)(ξ_r−ξ)` with a ≈ 0.05 and ξ_r = 0.75, tuned f
 
 ```matlab
 s = ads.nast.Sol103();  s.EigMethod = 'LAN';  s.FreqRange = [0 opts.FMax];  s.LModes = opts.NModes;
+s.set_free_free(info.CoM,opts.Symmetry,info.Augment.SpringDoFs);   % new on Sol103 too (§12.1 b)
 s.UpdateID(IDs);
 modes = s.run(fe,BinFolder=fullfile(bin,'s103'));
 % acceptance: symmetric half model -> 3 rigid modes (T1, T3, R2) below 1e-3*f1; list the first 10 elastic modes
@@ -809,7 +1079,7 @@ s.FlutterMethod = 'PKNL';                        % one-to-one (V, rho, M) lists 
 s.ReducedMachs = opts.MachList;   s.ReducedFreqs = opts.ReducedFreqs;               % A6
 s.LModes = opts.NModes;  s.FreqRange = [0 opts.FMax];  s.KeepRigidBodyModes = true; % A1 (new property)
 s.ModalDampingPercentage = opts.StructuralDamping;  s.DampingFreqs = [0 opts.FMax];
-s.set_free_free(info.CoM,opts.Symmetry);         % new helper: SUPORT 35 (sym) / 246 (antisym), A4
+s.set_free_free(info.CoM,opts.Symmetry,info.Augment.SpringDoFs);   % SUPORT 35 / 246 minus sprung DOFs (A4, §10.6)
 s.UpdateID(IDs);
 res = s.run(fe,BinFolder=fullfile(bin,sprintf('s145_h%05.0f',h)));
 inst = ads.bwb.findInstability(res,RigidModes=rigidModeNumbers(modes));
@@ -875,6 +1145,250 @@ Deliverables per bay case (C1/C2/C3) × {shell, beam}:
 * the margin to 1.15·V_D;
 * sensitivity of V_BFF to static margin, mass case, stiffness scale and I_yy.
 
+### 10.6 Pitch and plunge stiffness/damping augmentation
+
+**What it represents.** A grounded linear spring and viscous damper on the **plunge** DOF (T3) and the
+**pitch** DOF (R2) at a reference point: the CG by default, or a pivot `RefX/RefZ`. Two readings:
+
+* a **wind-tunnel pitch–plunge mount** (a rig with known springs and dampers), useful for tunnel or
+  flight-test correlation and for moving continuously between "restrained" and "free-free";
+* an **idealised stability augmentation system**. A pure moment `ΔM = −K_θ·θ − K_q·q` at the CG is
+  *exactly* a rotational spring (K_θ, attitude feedback) plus damper (K_q, rate feedback) to inertial
+  ground. Likewise a pure force for plunge. A real SAS acts through the elevons with actuator lag and
+  lift coupling; that is Ph 7 (control-surface structural modes + state-space feedback).
+
+In free flight the rigid pitch and plunge DOFs have zero structural stiffness. Adding K turns them into
+low-frequency spring modes, and adding C damps the short-period / BFF root.
+
+**Inputs** (`opts.Augment`, class in §5.3), all **full-aircraft** values:
+
+* absolute `Kplunge, Cplunge, Kpitch, Cpitch`; or
+* target uncoupled frequency and damping ratio `FPlunge/ZetaPlunge`, `FPitch/ZetaPitch`, converted with
+  the full-aircraft mass and the pitch inertia about the pivot:
+  `K_h = m·ω_h²`, `C_h = 2ζ_h·m·ω_h`, `K_θ = I_yy,p·ω_θ²`, `C_θ = 2ζ_θ·I_yy,p·ω_θ`.
+
+The half model uses **half of each value**, because it carries half the mass and inertia; this keeps
+the frequencies. When the pivot is away from the CG, pitch and plunge couple. The uncoupled frequencies
+are only targets; SOL103 reports the actual coupled frequencies.
+
+**Two implementations**, selected with `Augment.Mode`:
+
+| Mode | How | Cost | Use |
+|---|---|---|---|
+| `"structural"` | Grounded `CBUSH` (K3, K5, B3, B5 in basic axes) at an RBE3 reference grid spread over the structure within `Radius` of the pivot. Runs in SOL103/145/146. | one Nastran run per augmentation point | reference results; time-domain (SOL146) |
+| `"modal"` | `ΔK_hh = Φ_rᵀ·diag(K)·Φ_r`, `ΔB_hh = Φ_rᵀ·diag(C)·Φ_r`, with Φ_r = rows T3 and R2 of the mode shapes at the reference grid. Added before `stateSpace` (§11.2). | MATLAB only (seconds) | dense sweeps of K and C |
+| `"both"` | Structural in Nastran, plus the modal version on the **unaugmented** GAF set for cross-checking | | acceptance: V_f within 3 % |
+
+The reference grid is **always** created (even for `"modal"`), so its mode shapes are in the results.
+
+```matlab
+function aug = addAugmentation(fe,info,A)
+%ADDAUGMENTATION reference grid at the pivot (RBE3 to nearby structure) + grounded CBUSH if structural
+aug = struct('Grid',[],'K',[0 0],'C',[0 0],'SpringDoFs',[]);
+if A.Mode == "none", return, end
+mp  = info.Mass;  cg = mp.CG;                                   % half model (y_cg = 0)
+xref = [ads.util.tern(isnan(A.RefX),cg(1),A.RefX); 0; ads.util.tern(isnan(A.RefZ),cg(3),A.RefZ)];
+mpFull = struct('Mass',2*mp.Mass,'CG',cg,'Inertia',2*mp.Inertia);   % I_yy doubles (y_cg = 0)
+[K,C] = A.Values(mpFull,xref);
+ref = ads.fe.Point(xref);  ref.Name = "AugRef";  fe.Points(end+1) = ref;
+near = structuralGridsWithin(fe,xref,A.Radius);                 % independent shell / beam grids
+fe.RigidBodyElements(end+1) = ads.fe.RigidBodyElement(ref,123456,1/numel(near),123,near);
+if A.Mode ~= "modal"
+    fe.Bushes(end+1) = ads.fe.Bush(ref,K=[0 0 K(1) 0 K(2) 0]/2,B=[0 0 C(1) 0 C(2) 0]/2);   % half model
+end
+aug = struct('Grid',ref,'K',K/2,'C',C/2,'SpringDoFs',A.SpringDoFs());   % model (half) values
+end
+```
+
+```matlab
+function gaf = augmentModal(gaf,phiRef,K,C)
+%AUGMENTMODAL grounded plunge (T3) / pitch (R2) spring + damper at the reference grid, modal coordinates
+% phiRef : 6 x n mode-shape values at the reference grid, SAME modes and normalisation as gaf.M/K
+% K, C   : [plunge pitch] MODEL values (half values for a half model), N/m, N m/rad, N s/m, N m s/rad
+P = phiRef([3 5],:);
+gaf.K = gaf.K + P.'*diag(K)*P;
+gaf.B = gaf.B + P.'*diag(C)*P;
+end
+```
+
+```matlab
+% mode shapes at the reference grid from the same SOL145 run that wrote GAF.op4
+h5  = mni.result.hdf5(fullfile(bin,'bin','sol145.h5'));
+ms  = h5.read_modeshapes();
+phi = zeros(6,numel(ms));
+for j = 1:numel(ms), phi(:,j) = ms(j).EigenVector(ms(j).IDs == info.Augment.Grid.ID,:).'; end
+```
+
+**SUPORT with springs.** A sprung rigid DOF is no longer a mechanism, so it must **not** be SUPORTed or
+SPC'd at the CoM grid. `set_free_free` takes the spring DOFs and removes them from the SUPORT set, and
+`Sol145/Sol103.run` leave them free (§12.1 b):
+
+| Springs | SUPORT (sym half model) | SPC at CoM grid |
+|---|---|---|
+| none | 35 | 1246 |
+| plunge only | 5 | 1246 (T3 free, on the spring) |
+| pitch only | 3 | 1246 (R2 free, on the spring) |
+| both | none | 1246 (surge and the symmetry DOFs only) |
+
+The SPC at the CoM grid is `inv_dof(SUPORT ∪ spring DOFs)`, which is always 1246 for the symmetric case.
+Only the SUPORT set changes.
+
+**Nastran damping check.** Confirm that SOL145's generalised damping BHH includes the CBUSH viscous `B`
+terms for your Nastran version: compare the `"structural"` and `"modal"` results, which is the
+`Mode="both"` acceptance test. If it does not, use the modal route for damping, or supply `B2GG`/`B2PP` DMIG.
+
+**Sweeps from one Nastran run.**
+
+```matlab
+function T = augmentationSweep(gaf,phi,rfaOpts,flight,grid,massFull)
+%AUGMENTATIONSWEEP V_f over (FPitch, ZetaPitch, FPlunge, ZetaPlunge) from one GAF set (modal route)
+T = table();  base = gaf;
+for fp = grid.FPitch, for zp = grid.ZetaPitch, for fh = grid.FPlunge, for zh = grid.ZetaPlunge
+    A = ads.bwb.BWBAugment();  A.Mode = "modal";
+    A.FPitch = fp;  A.ZetaPitch = zp;  A.FPlunge = fh;  A.ZetaPlunge = zh;
+    [K,C] = A.Values(massFull,flight.RefPoint);
+    g = ads.aeroelastic.augmentModal(base,phi,K/2,C/2);
+    rl = ads.aeroelastic.rootLocus(g,rfaOpts,flight.V,flight.rho,flight.bref);   % tracked roots vs V
+    [Vf,ff,root] = ads.aeroelastic.firstCrossing(rl);                           % first Re(lambda) > 0
+    T = [T; {fp,zp,fh,zh,Vf,ff,root}]; %#ok<AGROW>
+end, end, end, end
+T.Properties.VariableNames = {'FPitch','ZetaPitch','FPlunge','ZetaPlunge','V_f','f_f','Root'};
+end
+```
+
+Use `NaN` in `grid.FPitch`/`grid.FPlunge` for "no spring" (free-free).
+
+### 10.7 Parametric studies (outer-wing span, sweep, tip extension, mass, stiffness, augmentation)
+
+**Split by cost.**
+
+* **Nastran-level parameters** change the FE model and need runs: `OWSpan`, `OWSweep`, `TipSpan`,
+  `TipSweep`, `TipDihedral`, `NBays`, `Shell`, `Case`, `SM`, `Kscale*`. Each point runs:
+  2 × SOL144 (NP, only if `CGPolicy="fixedSM"`), SOL103, and SOL145 PKNL per altitude with `OutputGAF=true`.
+* **MATLAB-level parameters** use the saved matrices: `FPitch/ZetaPitch/FPlunge/ZetaPlunge` (modal
+  augmentation) and extra speeds.
+
+```matlab
+classdef ParametricStudy < handle
+    %PARAMETRICSTUDY full-factorial study; cached Nastran points + MATLAB-level augmentation sweeps
+    properties
+        Geom ads.bwb.BWBGeometry = ads.bwb.BWBGeometry.A320Class(3);
+        Str  ads.bwb.BWBStructure = ads.bwb.BWBStructure.PRSEUS();
+        Mass ads.bwb.BWBMass = ads.bwb.BWBMass.A320Class();
+        Opts ads.bwb.BWBOpts = ads.bwb.BWBOpts(Shell=false);        % beam path for sweeps, shell for spot checks
+        Grid struct = struct('OWSpan',11.7,'OWSweep',29.1);         % Nastran-level factors
+        AugGrid struct = struct('FPitch',NaN,'ZetaPitch',0,'FPlunge',NaN,'ZetaPlunge',0);
+        Altitudes = [0 6000 11900];   Veas = linspace(60,260,41);
+        Root string = "bwb_study";    Async logical = true;
+        Results table = table();
+    end
+    methods
+        function run(obj)
+            base = obj.baseline();                                   % fixes RefChord, SystemsMassHalf, sigmaRef
+            pts  = expandGrid(obj.Grid);
+            jobs = struct('BinFolder',{},'SolType',{});
+            for i = 1:numel(pts)
+                [g,s,m,o] = obj.apply(pts(i),base);
+                dirp = fullfile(obj.Root,pointTag(pts(i)));
+                if isfile(fullfile(dirp,'point.mat')), continue, end  % cached
+                [fe,info] = ads.bwb.bwb2fe(g,s,m,o);
+                if o.CGPolicy == "fixedSM"                           % NP of THIS geometry, then rebuild
+                    m.XNP = ads.bwb.neutralPoint(fe,fe.UpdateIDs(),fullfile(dirp,'np'),flightAt(info));
+                    [fe,info] = ads.bwb.bwb2fe(g,s,m,o);
+                end
+                fe = fe.Flatten();  IDs = fe.UpdateIDs();
+                modes = runSol103(fe,IDs,info,o,fullfile(dirp,'s103'));
+                for h = obj.Altitudes
+                    job = runSol145(fe,IDs,info,o,h,obj.Veas,fullfile(dirp,sprintf('s145_h%05.0f',h)), ...
+                                    Async=obj.Async,OutputGAF=true);
+                    jobs(end+1) = job; %#ok<AGROW>
+                end
+                save(fullfile(dirp,'point.mat'),'pts','i','info','modes','g','m','o');
+            end
+            if obj.Async && ~isempty(jobs), ads.nast.waitForJobs(jobs); end
+            obj.Results = obj.collect(pts);                          % Sol145.run(...,CollectOnly=true) + findInstability
+            obj.Results = obj.augment(obj.Results);                  % augmentationSweep on each saved GAF set
+        end
+        function [g,s,m,o] = apply(obj,p,base)
+            g = obj.Geom;  s = obj.Str;  m = obj.Mass;  o = obj.Opts;   % value classes: copies
+            o.RefChord = base.RefChord;  m.SystemsMassHalf = base.SystemsMassHalf;  s.SigmaRef = base.SigmaRef;
+            for f = string(fieldnames(p))'
+                v = p.(f);
+                switch f
+                    case "OWSpan",      g.OW.Span = v;
+                    case "OWSweep",     g.OW.Sweep = v;
+                    case "OWTaper",     g.OW.Taper = v;
+                    case "TipSpan",     g.Tip.Span = v;
+                    case "TipSweep",    g.Tip.Sweep = v;
+                    case "TipDihedral", g.Tip.Dihedral = v;
+                    case "NBays",       g.NBays = v;
+                    case "Shell",       o.Shell = v;
+                    case "Case",        m.Case = v;
+                    case "SM",          m.StaticMargin = v;
+                    case "Kscale",      o.StiffnessScale = struct('CB',v,'MS',v,'OW',v);
+                    case "KscaleOW",    o.StiffnessScale.OW = v;
+                    otherwise, error('bwb:study','unknown factor %s',f);
+                end
+            end
+        end
+    end
+end
+
+function pts = expandGrid(G)
+f = fieldnames(G);  n = cellfun(@(k) numel(G.(k)),f);
+r = arrayfun(@(k) 1:k,n,'UniformOutput',false);  idx = cell(1,numel(f));  [idx{:}] = ndgrid(r{:});
+pts = struct();
+for p = 1:numel(idx{1})
+    for j = 1:numel(f), v = G.(f{j});  pts(p).(f{j}) = v(idx{j}(p)); end
+end
+end
+
+function t = pointTag(p)
+f = string(fieldnames(p))';  t = strjoin(arrayfun(@(k) sprintf('%s%s',k,string(p.(k))),f,'UniformOutput',false),'_');
+t = regexprep(t,'[^\w\.-]','');
+end
+```
+
+The remaining pieces are short helpers:
+
+* `baseline()` builds the baseline once and stores:
+  * `RefChord` = baseline MAC,
+  * `SystemsMassHalf` from `massBudget`,
+  * `SigmaRef` for `momentGauge` (a new `BWBStructure` property).
+* `runSol103` and `runSol145` wrap §10.1 and §10.3. `runSol145` returns the job struct
+  `(BinFolder, SolType='sol145')` that `waitForJobs` expects.
+* `collect` calls `Sol145.run(...,CollectOnly=true)` and `findInstability`.
+* `augment` runs `augmentationSweep` for each point and altitude.
+* `flightAt` gives the NP flight condition (V, ρ, M, CoM).
+
+Example study:
+
+```matlab
+S = ads.bwb.ParametricStudy();
+S.Grid    = struct('OWSpan',11.7+[0 1 2 3], 'OWSweep',[20 25 29.1 35 40], 'Case',["MTOM","MZFW"]);
+S.AugGrid = struct('FPitch',[NaN 0.3 0.6 1.0],'ZetaPitch',[0 0.1 0.3 0.7], ...
+                   'FPlunge',[NaN 0.3 0.6],'ZetaPlunge',[0 0.2]);
+S.run();
+ads.bwb.plotStudy(S.Results,X="OWSweep",Y="Veas_f",Group="OWSpan",Filter="Case=='MTOM' & isnan(FPitch)");
+```
+
+That is 40 Nastran points × 3 altitudes on the beam path, and each point's 96 augmentation
+combinations run in MATLAB. Re-run a few corners on the shell path to check the beam trends.
+
+**Results table columns:** point tag, all factors, b, S, AR, c/4 sweep, MAC, mass, CG, NP, SM (target
+and actual), I_yy, first elastic sym/antisym frequencies, altitude, V_f (EAS), f_f, instability type,
+margin to 1.15·V_D, augmentation values, and V_f with augmentation.
+
+**Hypotheses the study is set up to test** (not results):
+
+* **Span ↑** lowers the first symmetric bending frequency and is expected to bring the BFF coalescence
+  to a lower speed. `momentScaled` gauges partly offset this.
+* **Aft sweep ↑** moves the NP and the outer-wing mass aft (I_yy ↑) and adds bend–twist wash-out.
+  Holding SM fixed (`fixedSM`) separates the elastic and inertial effect from the static-margin effect.
+* **Pitch stiffness ↑** raises the short-period-like frequency and moves the coalescence.
+  **Pitch damping ↑** is expected to raise V_BFF. Plunge stiffness and damping mainly change the
+  low-speed plunge root and its coupling.
+
 ---
 
 ## 11. Flight-dynamic behaviour: integrated rigid + elastic state-space
@@ -926,6 +1440,7 @@ end
 ```
 
 ```matlab
+% augmentation (section 10.6), when used: gaf = ads.aeroelastic.augmentModal(gaf,phiRef,K,C) BEFORE stateSpace
 function sys = stateSpace(gaf,rfa,V,rho,bref)
 %STATESPACE x = [q; qdot; x_lag]  with  M qdd + B qd + K q = qdyn*[A0 q + A1 (b/V) qd + A2 (b/V)^2 qdd + sum A_l x_l]
 n = size(gaf.M,1);  nL = numel(rfa.beta);  qd = 0.5*rho*V^2;  A = rfa.A;
@@ -980,23 +1495,47 @@ end
 properties
     KeepRigidBodyModes logical = false;   % pass-through to modeParamDefaults(KeepRigid=...)
     OutputGAF logical = false;            % write MHH/BHH/KHH/QHHL to ../bin/GAF.op4 (section 11.1)
+    SpringDoFs double = [];               % rigid DOFs restrained by augmentation springs (e.g. 35)
 end
 methods
-    function set_free_free(obj,CoM,symmetry)
+    function set_free_free(obj,CoM,symmetry,springDoFs)
         arguments
             obj
             CoM ads.fe.Constraint
             symmetry string {mustBeMember(symmetry,["sym","antisym","none"])} = "sym"
+            springDoFs double = []               % from info.Augment.SpringDoFs
         end
         obj.isFree = true;  obj.CoM = CoM;  obj.KeepRigidBodyModes = true;
         switch symmetry
-            case "sym",     obj.DoFs = 35;       % plunge + pitch (surge SPC'd at the CoM grid)
-            case "antisym", obj.DoFs = 246;      % lateral + roll + yaw
-            otherwise,      obj.DoFs = 123456;
+            case "sym",     rb = 35;             % plunge + pitch (surge SPC'd at the CoM grid)
+            case "antisym", rb = 246;            % lateral + roll + yaw
+            otherwise,      rb = 123456;
         end
+        sup = setdiff(num2str(rb),num2str(springDoFs));   % sprung DOFs get no SUPORT
+        obj.DoFs = str2num(sup); %#ok<ST2NM>              % [] when every rigid DOF is sprung
+        obj.SpringDoFs = springDoFs;
     end
 end
 ```
+
+`Sol145/run.m` (line 131–139) and `Sol103/run.m` (line 20–21): keep the SUPORTed and the sprung DOFs
+free at the CoM grid:
+
+```matlab
+if ~isempty(obj.CoM)
+    if obj.isFree
+        free = str2num([num2str(obj.DoFs) num2str(obj.SpringDoFs)]); %#ok<ST2NM>
+        obj.CoM.ComponentNumbers = ads.nast.inv_dof(free);        % e.g. 1246 for sym
+        obj.CoM.SupportNumbers   = obj.DoFs;                       % [] -> no SUPORT card
+    else
+        obj.CoM.ComponentNumbers = 123456;
+        obj.CoM.SupportNumbers   = [];
+    end
+end
+```
+
+Add the same `SpringDoFs` property and `set_free_free` method to `Sol103` (and `Sol146` for gust
+responses of the augmented model).
 
 In `write_flutter.m` and `write_main_bdf.m`, replace both calls:
 
@@ -1190,7 +1729,66 @@ X = [p.X];  p = p(X(1,:) >= e1*L-tol & X(1,:) <= e2*L+tol);     % local x = span
 end
 ```
 
-**(k) New files:** the `+ads/+bwb` package (§5–§10), the `+ads/+aeroelastic` package (§11),
+**(k) `tbx/+ads/+fe/Bush.m` *(new)*: CBUSH/PBUSH, grounded when `Point2` is empty (§10.6).**
+
+```matlab
+classdef Bush < ads.fe.Element
+    %BUSH spring/damper element; K, B (1x6) in the CID axes (empty CoordSys -> basic, CID 0)
+    properties
+        Point1 ads.fe.Point
+        Point2 ads.fe.Point = ads.fe.Point.empty     % empty -> grounded
+        K (1,6) double = zeros(1,6);
+        B (1,6) double = zeros(1,6);
+        CoordSys = [];
+        ID double = nan;  PID double = nan;
+    end
+    methods
+        function obj = Bush(p1,opts)
+            arguments
+                p1 ads.fe.Point
+                opts.Point2 ads.fe.Point = ads.fe.Point.empty
+                opts.K (1,6) double = zeros(1,6)
+                opts.B (1,6) double = zeros(1,6)
+                opts.CoordSys = []
+            end
+            obj.Point1 = p1;  obj.Point2 = opts.Point2;  obj.K = opts.K;  obj.B = opts.B;
+            obj.CoordSys = opts.CoordSys;
+        end
+        function ids = UpdateID(obj,ids)
+            for i = 1:numel(obj)
+                obj(i).ID = ids.EID;  ids.EID = ids.EID + 1;  obj(i).PID = ids.PID;  ids.PID = ids.PID + 1;
+            end
+        end
+        function Export(obj,fid)
+            if isempty(obj), return, end
+            mni.printing.bdf.writeComment(fid,"CBUSH/PBUSH : springs and dampers (grounded if GB blank)");
+            mni.printing.bdf.writeColumnDelimiter(fid,"short")
+            for i = 1:numel(obj)
+                gb  = [];  if ~isempty(obj(i).Point2),   gb  = obj(i).Point2.ID;   end
+                cid = 0;   if ~isempty(obj(i).CoordSys), cid = obj(i).CoordSys.ID; end
+                mni.printing.cards.CBUSH(obj(i).ID,obj(i).PID,obj(i).Point1.ID,gb,'CID',cid).writeToFile(fid);
+                mni.printing.cards.PBUSH(obj(i).PID,'K',obj(i).K,'B',obj(i).B).writeToFile(fid);
+            end
+        end
+        function plt_obj = drawElement(obj)
+            plt_obj = [];
+            for i = 1:numel(obj)
+                X = obj(i).Point1.GlobalPos;
+                plt_obj(end+1) = plot3(X(1),X(2),X(3),'mp','MarkerFaceColor','m','Tag',"Bush"); %#ok<AGROW>
+            end
+        end
+    end
+end
+```
+
+`Component.m` gets the property `Bushes (:,1) ads.fe.Bush = ads.fe.Bush.empty;`. The existing
+`UpdateIDs`, `Export` and `drawElement` loops pick it up automatically because they iterate over
+`ads.fe.Element` properties.
+
+A grounded CBUSH needs `CID` (MSC: when GB is blank, CID must be given), and Matran's validator
+currently rejects `CID=0`: see §12.3 (d).
+
+**(l) New files:** the `+ads/+bwb` package (§5–§10), the `+ads/+aeroelastic` package (§11),
 `+ads/+fe/Pressure.m` (optional, §12.3), the examples and the tests.
 
 ### 12.2 baff
@@ -1316,6 +1914,17 @@ end
 The matching `ads.fe.Pressure` element loops over its shells and writes one `PLOAD4` per `EID`, with
 the load-set `ID` taken from `ids.SID`.
 
+**(d) `tbx/+mni/+printing/+cards/CBUSH.m`: allow a grounded bush with `CID=0`, and fix the `X` branch.**
+
+```matlab
+p.addOptional('GB',[],@(x) isempty(x) || x>=0)      % was @(x)x>=0 (fails on [])
+p.addParameter('CID',[],@(x) x>=0)                  % was x>0; CID 0 = basic, needed when GB is blank
+...
+case 'x'                                            % writeToFile: was writing G0 instead of X1-X3
+    data = [data,{obj.X1},{obj.X2},{obj.X3}];
+    format = [format,'fffb'];
+```
+
 ---
 
 ## 13. Phases and acceptance
@@ -1328,7 +1937,8 @@ the load-set `ID` taken from `ids.SID`.
 | **3** | Aero (panel size, camber, spline modes, controls, SYMXZ ±1) | Σ CAERO area = S/2; no spline point outside its panel span; *(Nastran)* rigid SOL144 runs |
 | **4** | Distributed mass, CG targeting, free-free, NP, SOL145 settings (§12.1 a–d) | Mass = case mass/2 ± 0.5 %; CG = target ± 0.05 m; *(Nastran)* SOL103 gives 3 rigid modes ≈ 0 Hz; **flutter.bdf has no LFREQFL, and the summary contains roots that start at ≈ 0 Hz**; NP unit test on a flat plate |
 | **5** | Beam path (condensation, spine, calibration, `HollowRect` fix) | Single cell = 4A²/∮ds/t; textbook two-cell case; *(Nastran)* identified vs analytic within ±15 % outboard; beam vs shell first sym bending within 10 % |
-| **6** | Stability study: `stabilitySweep` over C1/C2/C3 × shell/beam × {MTOM, MZFW, OEW} × SM {0, 0.05, 0.10} × Kscale {0.5, 1, 2}; GAF export → RFA → state-space | Boundary tables and plots; BFF identified where present; state-space and PKNL crossing speeds within 3 % |
+| **4b** | Parametric geometry + augmentation: derived `BWBGeometry`, `controlSurfaces`, `tankLoads`, `momentGauge`, `BWBAugment`, `addAugmentation`, `ads.fe.Bush`, spring-aware `set_free_free`, Matran CBUSH fix | Geometry tests below pass; *(Nastran)* a rigid model on springs (Kscale = 1e3) gives SOL103 plunge/pitch frequencies within 1 % of `FPlunge`/`FPitch` when the pivot is at the CG; the SUPORT card disappears for sprung DOFs |
+| **6** | Stability study: `ParametricStudy` over OWSpan × OWSweep (± tip extension) × mass case × SM × Kscale, per bay case and path; GAF export → RFA → state-space; `augmentationSweep` | Boundary tables and plots; BFF identified where present; state-space and PKNL crossing speeds within 3 %; **`Augment.Mode="both"`: structural (Nastran) vs modal (MATLAB) V_f within 3 %**; cached points are not re-run |
 | **7** (optional) | Phugoid augmentation, gust/control time responses, grillage B2, ShellStation H5 IO, pressure case, sizing loop, PCOMP tailoring | case-specific |
 
 Unit-test skeleton:
@@ -1360,6 +1970,28 @@ classdef bwb2feTest < matlab.unittest.TestCase
             d = ads.nast.modeParamDefaults(40,[0.01 30],KeepRigid=true);
             tc.verifyEmpty(d{strcmp(d(:,1),'LFREQFL'),3});
         end
+        function parametricPlanform(tc)
+            g = ads.bwb.BWBGeometry.A320Class(3);
+            tc.verifyEqual(g.Area,221.0,'RelTol',0.005);                 % baseline
+            tc.verifyEqual(g.QCSweepOW,29.1,'AbsTol',1e-6);
+            g.OW.Span = 13.7;  g.OW.Sweep = 35;                          % stretch + sweep
+            tc.verifyEqual(g.HalfSpan,19.9,'AbsTol',1e-9);
+            tc.verifyEqual(g.QCSweepOW,35,'AbsTol',1e-6);
+            tc.verifyEqual(g.Chord(end),0.368*5,'AbsTol',1e-9);         % taper kept
+            tc.verifyEqual(g.XLE(3),10.85,'AbsTol',0.01);                % kink section fixed (pivot)
+            g.Tip.Span = 1.5;  tc.verifyEqual(numel(g.Y),5);             % tip extension adds a station
+            fe = ads.bwb.bwb2fe(g,ads.bwb.BWBStructure.PRSEUS(),ads.bwb.BWBMass.A320Class(), ...
+                                ads.bwb.BWBOpts(Shell=false));
+            tc.verifyEqual(sum([fe.AeroSurfaces.Area]),g.Area/2,'RelTol',0.01);   % panels follow the planform
+        end
+        function augmentationValues(tc)
+            A = ads.bwb.BWBAugment();  A.Mode = "structural";  A.FPitch = 0.5;  A.ZetaPitch = 0.2;
+            mp = struct('Mass',79000,'CG',[10;0;0],'Inertia',diag([1 2e6 1]));
+            [K,C] = A.Values(mp,[10;0;0]);
+            tc.verifyEqual(K(2),2e6*(2*pi*0.5)^2,'RelTol',1e-12);
+            tc.verifyEqual(C(2),2*0.2*2e6*(2*pi*0.5),'RelTol',1e-12);
+            tc.verifyEqual(A.SpringDoFs(),5);
+        end
     end
 end
 ```
@@ -1381,6 +2013,13 @@ end
 5. **Transonic range:** DLM is uncorrected above about M 0.8. State this in the clearance margins.
 6. **Version-dependent DMAP** for GAF export (§11.1). Verify it with `DIAG 14` for your Nastran version.
 7. **Your fork:** merge any `LBeam`/`SecondaryBeams` or `shell=false` code from your fork before Phase 1.
+8. **Parametric comparability:** results only compare across geometries if the policies (gauges, OEW,
+   fuel, CG, REFC) are held fixed and recorded. `ParametricStudy` stores them with every point. Spans
+   above 36 m break ICAO Code C and imply a folding tip; a *hinged* tip changes the dynamics and is a
+   separate option.
+9. **Grounded augmentation** is not physical in free flight. It stands for a rig mount or an ideal SAS.
+   Real control-law augmentation through the elevons (actuator lag, lift coupling) needs
+   control-surface modes (Ph 7). Keep the pivot and the frequency/damping targets in the results table.
 
 ---
 
